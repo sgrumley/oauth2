@@ -1,0 +1,3 @@
+Review readme references and rebuild the bases of the handlers and fields
+Turn Access Token into a JWT
+Add a third service that has resources and uses the auth server to grant access

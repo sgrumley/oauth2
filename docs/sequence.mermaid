@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant User
+    participant Client
+    participant AuthServer as Authorization Server
+    participant ResourceServer as Resource Server
+
+    Note over User,ResourceServer: Authorization Code Flow
+
+    User->>Client: 1. Initiates login
+    Client->>AuthServer: 2. Authorization Request
+    Note right of Client: redirect_uri, client_id, <br/>scope, state
+    
+    AuthServer->>User: 3. Authentication prompt
+    User->>AuthServer: 4. User authenticates
+    
+    AuthServer->>Client: 5. Authorization Code
+    Note left of AuthServer: Redirects to redirect_uri<br/>with auth code
+    
+    Client->>AuthServer: 6. Token Request
+    Note right of Client: auth code, client_id,<br/>client_secret
+    
+    AuthServer->>Client: 7. Access Token
+    Note left of AuthServer: access_token,<br/>refresh_token (optional)
+    
+    Client->>ResourceServer: 8. API Request
+    Note right of Client: Bearer access_token
+    
+    ResourceServer->>Client: 9. Protected Resource
+    
+    Note over Client,ResourceServer: Token Refresh Flow
+    
+    Client->>AuthServer: 10. Refresh Token Request
+    Note right of Client: refresh_token,<br/>client_credentials
+    
+    AuthServer->>Client: 11. New Access Token
+    Note left of AuthServer: new access_token,<br/>new refresh_token
