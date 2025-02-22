@@ -1,15 +1,10 @@
 package main
 
-// This is the auth server
+// WIP: this is the server with resources
 
 import (
 	"crypto/tls"
-	"fmt"
-	"log"
 	"net/http"
-
-	"github.com/sgrumley/oauth/internal/service/auth"
-	"github.com/sgrumley/oauth/internal/store"
 )
 
 var port = ":8443"
@@ -26,12 +21,11 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	store := store.New()
-	authHandler := auth.NewHandler(store)
+	// store := store.New()
+	// postHandler := auth.NewHandler(store)
 
 	// Routes
-	mux.HandleFunc("GET /authorize", authHandler.Authorization)
-	mux.HandleFunc("POST /oauth/token", authHandler.Token)
+	// mux.HandleFunc("GET /posts", authHandler.Authorization)
 
 	server := &http.Server{
 		Addr:      port,
@@ -39,9 +33,8 @@ func main() {
 		Handler:   mux,
 	}
 
-	fmt.Println("listening on localhost" + port)
 	err := server.ListenAndServeTLS("server.crt", "server.key")
 	if err != nil {
-		log.Fatal(err)
+		// TODO:
 	}
 }

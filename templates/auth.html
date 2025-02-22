@@ -1,0 +1,102 @@
+<!-- templates/auth.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Authorization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .details {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OAuth Authorization</h1>
+        <p>Click below to authorize the application:</p>
+        <a href="/authorize?response_type=code&client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&state={{.State}}" 
+           class="button">
+            Authorize
+        </a>
+        <div class="details">
+            <p>Details:</p>
+            <ul>
+                <li>Client ID: {{.ClientID}}</li>
+                <li>Redirect URI: {{.RedirectURI}}</li>
+                <li>State: {{.State}}</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+
+<!-- templates/callback.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Callback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .code-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OAuth Callback</h1>
+        {{if .Error}}
+            <p class="error">Error: {{.Error}}</p>
+        {{else}}
+            <p class="success">Authorization successful!</p>
+            <div class="code-box">
+                <p><strong>Authorization Code:</strong> {{.Code}}</p>
+                <p><strong>State:</strong> {{.State}}</p>
+            </div>
+        {{end}}
+    </div>
+</body>
+</html>

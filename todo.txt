@@ -1,3 +1,4 @@
 Review readme references and rebuild the bases of the handlers and fields
 Turn Access Token into a JWT
+Look into why the redirect page is needed? whose page is it... use the template
 Add a third service that has resources and uses the auth server to grant access

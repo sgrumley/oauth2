@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"crypto/tls"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/sgrumley/oauth/internal/models"
 	"github.com/sgrumley/oauth/internal/token"
+	"github.com/sgrumley/oauth/pkg/web"
 )
 
 type Handler struct {
@@ -87,28 +89,31 @@ errors:
 */
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.1
-func (h *Handler) Authorization(c echo.Context) error {
-	clientID := c.QueryParam("client_id")
-	redirectURI := c.QueryParam("redirect_uri")
-	responseType := c.QueryParam("response_type")
+func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
+	if r.TLS != nil {
+		log.Printf("TLS Version: %x, Cipher Suite: %s",
+			r.TLS.Version,
+			tls.CipherSuiteName(r.TLS.CipherSuite))
+	}
 
-	if responseType != "code" || responseType != "token" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "unsupported_response_type",
-		})
+	clientID := r.URL.Query().Get("client_id")
+	redirectURI := r.URL.Query().Get("redirect_uri")
+	responseType := r.URL.Query().Get("response_type")
+
+	if responseType != "code" && responseType != "token" {
+		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
+		return
 	}
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "unauthorized_client",
-		})
+		web.Respond(w, http.StatusBadRequest, "unauthorized_client")
+		return
 	}
 
 	if client.RedirectURI != redirectURI {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid_redirect_uri",
-		})
+		web.Respond(w, http.StatusBadRequest, "invalid_redirect_uri")
+		return
 	}
 
 	// TODO: pop up a login page
@@ -116,17 +121,17 @@ func (h *Handler) Authorization(c echo.Context) error {
 
 	code, err := token.GenerateAuthCode(clientID, redirectURI)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "server_error",
-		})
+		web.Respond(w, http.StatusBadRequest, "server_error")
+		return
 	}
 	h.store.SetAuthCode(clientID, code)
 
 	// TODO: if state was given it should also be returned
-	return c.Redirect(http.StatusFound, redirectURI+"?code="+code.Code)
+	http.Redirect(w, r, redirectURI+"?code="+code.Code, http.StatusFound)
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3
+// This requires "aplication/x-www-form-urlencoded" format
 type TokenRequest struct {
 	GrantType   string `json:"request_type"`
 	Code        string `json:"code"`
@@ -143,40 +148,47 @@ type TokenResponse struct {
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.2
-func (h *Handler) Token(c echo.Context) error {
-	grantType := c.FormValue("grant_type")
+func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		// TODO: all the possible errors should be copied from spec and made variables to return
+		web.Respond(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	grantType := r.PostForm.Get("grant_type")
 	if grantType != "authorization_code" { // TODO: this can be expanded upon
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "unsupported_grant_type",
-		})
+		web.Respond(w, http.StatusBadRequest, "unsupported_grant_type")
+		return
 	}
 
-	code := c.FormValue("code")
-	clientID := c.FormValue("client_id")
-	clientSecret := c.FormValue("client_secret")
-	redirectURI := c.FormValue("redirect_uri")
+	code := r.PostForm.Get("code")
+	clientID := r.PostForm.Get("client_id")
+	clientSecret := r.PostForm.Get("client_secret")
+	redirectURI := r.PostForm.Get("redirect_uri")
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil || client.Secret != clientSecret {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "invalid_client",
-		})
+		web.Respond(w, http.StatusBadRequest, "invalid_client")
+		return
 	}
 
 	authCode, err := h.store.GetAuthCode(code)
 	if err != nil || authCode.ExpiresAt.Before(time.Now()) ||
 		authCode.ClientID != clientID || authCode.RedirectURI != redirectURI {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid_grant",
-		})
+		web.Respond(w, http.StatusBadRequest, "invalid_client_id")
+		return
 	}
 
 	// Generate tokens
-	token := token.Generate()
+	token, err := token.Generate()
+	if err != nil {
+		web.Respond(w, http.StatusInternalServerError, "server_error")
+		return
+	}
 	h.store.SetToken(token)
 
 	// Remove used auth code
 	h.store.DeleteAuthCode(code)
 
-	return c.JSON(http.StatusOK, token)
+	web.RespondContent(w, http.StatusOK, token)
 }
