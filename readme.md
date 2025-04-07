@@ -1,4 +1,18 @@
 # OAUTH2 Basic Implementation
+
+## Overview
+1. Run client 
+2. Hits server endpoint 
+3. Redirects to login page 
+4. Sign in
+5. Redirect to the client (mocked in terminal like GCP)
+6. See the result printed in the terminal (client) 
+
+This requires 3 applications 
+ - Mocked login page:8080
+ - Client:8081 (callback endpoint)
+ - Authorization Service:8082 (token and oauth/authorize endpoints)
+
 ## Protocols
 - OAuth2
 - OpenID

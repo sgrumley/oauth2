@@ -1,20 +1,14 @@
 package main
 
-import (
-	"net/http"
-
-	"github.com/labstack/echo/v4"
-)
-
 type Response struct {
 	Message string `json:"message"`
 	Status  string `json:"status"`
 }
 
 // https://auth0.com/docs/authenticate/protocols/oauth#token-endpoint
-func token(c echo.Context) error {
-	return c.String(http.StatusOK, "Hello, World!")
-}
+// func token(c echo.Context) error {
+// 	return c.String(http.StatusOK, "Hello, World!")
+// }
 
 type AuthRequest struct {
 	// Tells the authorization server which grant to execute.
@@ -38,10 +32,10 @@ type AuthRequest struct {
 }
 
 // https://auth0.com/docs/authenticate/protocols/oauth#authorization-endpoint
-func authorization(c echo.Context) error {
-	response := Response{
-		Message: "This is a JSON response",
-		Status:  "success",
-	}
-	return c.JSON(http.StatusOK, response)
-}
+// func authorization(c echo.Context) error {
+// 	response := Response{
+// 		Message: "This is a JSON response",
+// 		Status:  "success",
+// 	}
+// 	return c.JSON(http.StatusOK, response)
+// }

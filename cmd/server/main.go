@@ -12,7 +12,7 @@ import (
 	"github.com/sgrumley/oauth/internal/store"
 )
 
-var port = ":8443"
+var port = ":8082"
 
 func main() {
 	// TODO: look into this

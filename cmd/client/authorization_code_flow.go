@@ -104,3 +104,35 @@ func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*T
 
 	return &tokenResp, nil
 }
+
+// GetAuthCode is used to get an auth code that can be exchanged for a token
+func (c *AuthClient) GetAuthCode() error {
+	data := url.Values{
+		"response_type": {"code"},
+		"redirect_uri":  {c.RedirectURI},
+		"client_id":     {c.ClientID},
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.AuthURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create auth request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("auth request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("[Client] response status code: ", resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	fmt.Println("[Client] auth response: ", string(body))
+	return nil
+}

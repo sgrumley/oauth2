@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -90,6 +91,8 @@ errors:
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
+	web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
+	fmt.Println("[Server] Authorization request received")
 	if r.TLS != nil {
 		log.Printf("TLS Version: %x, Cipher Suite: %s",
 			r.TLS.Version,
@@ -127,7 +130,9 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	h.store.SetAuthCode(clientID, code)
 
 	// TODO: if state was given it should also be returned
-	http.Redirect(w, r, redirectURI+"?code="+code.Code, http.StatusFound)
+	url := redirectURI + "?code=" + code.Code
+	fmt.Println("[Server] Authorization redirected to " + url)
+	http.Redirect(w, r, url, http.StatusFound)
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3
@@ -163,21 +168,41 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	code := r.PostForm.Get("code")
 	clientID := r.PostForm.Get("client_id")
-	clientSecret := r.PostForm.Get("client_secret")
+	// clientSecret := r.PostForm.Get("client_secret")
 	redirectURI := r.PostForm.Get("redirect_uri")
 
+	// TODO: unsure what clientsecret is
 	client, err := h.store.GetClient(clientID)
-	if err != nil || client.Secret != clientSecret {
+	// if err != nil || client.Secret != clientSecret {
+	if err != nil || client.ID != clientID {
 		web.Respond(w, http.StatusBadRequest, "invalid_client")
 		return
 	}
 
 	authCode, err := h.store.GetAuthCode(code)
-	if err != nil || authCode.ExpiresAt.Before(time.Now()) ||
-		authCode.ClientID != clientID || authCode.RedirectURI != redirectURI {
-		web.Respond(w, http.StatusBadRequest, "invalid_client_id")
-		return
+	if err != nil {
+		web.Respond(w, http.StatusBadRequest, fmt.Sprintf("invalid_client_id authcode missing: %v", err))
 	}
+	if authCode.ExpiresAt.Before(time.Now()) {
+		web.Respond(w, http.StatusBadRequest, fmt.Sprintf("invalid_client_id expired: expired at %v, current time %v", authCode.ExpiresAt, time.Now()))
+	}
+	if authCode.RedirectURI != redirectURI {
+		web.Respond(w, http.StatusBadRequest, fmt.Sprintf("invalid_client_id redirect_uri didn't match: expected %q, got %q", authCode.RedirectURI, redirectURI))
+	}
+	// if err != nil {
+	// 	web.Respond(w, http.StatusBadRequest, "invalid_client_id authcode missing")
+	// }
+	// if authCode.ExpiresAt.Before(time.Now()) {
+	// 	web.Respond(w, http.StatusBadRequest, "invalid_client_id expired")
+	// }
+	// if authCode.RedirectURI != redirectURI {
+	// 	web.Respond(w, http.StatusBadRequest, "invalid_client_id redirect_uri didnt match")
+	// }
+	// if err != nil || authCode.ExpiresAt.Before(time.Now()) ||
+	// 	authCode.ClientID != clientID || authCode.RedirectURI != redirectURI {
+	// 	web.Respond(w, http.StatusBadRequest, "invalid_client_id")
+	// 	return
+	// }
 
 	// Generate tokens
 	token, err := token.Generate()
