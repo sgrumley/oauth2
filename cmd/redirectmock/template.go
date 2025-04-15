@@ -52,7 +52,7 @@ const homeHTML = `<!DOCTYPE html>
         
         <h2>How it works:</h2>
         <ol>
-            <li>Click the login button below</li>
+            <li>Click the login button below (to mock entering a username and password)</li>
             <li>You'll be redirected to the authorization server</li>
             <li>After authorization, you'll be redirected back with a code</li>
             <li>The code will be displayed on the callback page</li>

@@ -1,14 +1,13 @@
 package auth
 
 import (
-	"crypto/tls"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/sgrumley/oauth/internal/models"
 	"github.com/sgrumley/oauth/internal/token"
+	"github.com/sgrumley/oauth/pkg/browser"
 	"github.com/sgrumley/oauth/pkg/web"
 )
 
@@ -91,36 +90,38 @@ errors:
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
-	web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
 	fmt.Println("[Server] Authorization request received")
-	if r.TLS != nil {
-		log.Printf("TLS Version: %x, Cipher Suite: %s",
-			r.TLS.Version,
-			tls.CipherSuiteName(r.TLS.CipherSuite))
-	}
+	// if r.TLS != nil {
+	// 	log.Printf("TLS Version: %x, Cipher Suite: %s",
+	// 		r.TLS.Version,
+	// 		tls.CipherSuiteName(r.TLS.CipherSuite))
+	// }
 
 	clientID := r.URL.Query().Get("client_id")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
 
+	queryParams := r.URL.Query()
+	fmt.Println("All query parameters:", queryParams)
+	fmt.Println("[Server] Authorization queries: " + clientID + " " + redirectURI + " " + responseType)
 	if responseType != "code" && responseType != "token" {
+		fmt.Println("[Server] Authorization response type: " + responseType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
 		return
 	}
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
+		fmt.Println("[Server] Authorization client: " + client.ID)
 		web.Respond(w, http.StatusBadRequest, "unauthorized_client")
 		return
 	}
 
 	if client.RedirectURI != redirectURI {
+		fmt.Println("[Server] Authorization redirect: " + client.RedirectURI + " vs actual: " + redirectURI)
 		web.Respond(w, http.StatusBadRequest, "invalid_redirect_uri")
 		return
 	}
-
-	// TODO: pop up a login page
-	// HACK: mocked successful login
 
 	code, err := token.GenerateAuthCode(clientID, redirectURI)
 	if err != nil {
@@ -130,9 +131,13 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	h.store.SetAuthCode(clientID, code)
 
 	// TODO: if state was given it should also be returned
-	url := redirectURI + "?code=" + code.Code
+	url := "http:localhost:8080/login" + "?code=" + code.Code + "&redirect_uri=" + redirectURI
 	fmt.Println("[Server] Authorization redirected to " + url)
-	http.Redirect(w, r, url, http.StatusFound)
+	// TODO: update to authURL to var
+	// http.Redirect(w, r, url, http.StatusFound)
+	if err := browser.OpenBrowser(url); err != nil {
+		fmt.Println("failed to open browser")
+	}
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3

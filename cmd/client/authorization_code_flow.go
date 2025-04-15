@@ -45,15 +45,18 @@ func (c *AuthClient) BuildAuthorizationURL(scope string) (string, string, error)
 		return "", "", fmt.Errorf("failed to generate state: %w", err)
 	}
 
-	params := url.Values{
-		"response_type": {"code"},
-		"client_id":     {c.ClientID},
-		"redirect_uri":  {c.RedirectURI},
-		"scope":         {scope},
-		"state":         {state},
-	}
+	baseURL, err := url.Parse(c.AuthURL)
 
-	return fmt.Sprintf("%s?%s", c.AuthURL, params.Encode()), state, nil
+	query := baseURL.Query()
+	query.Set("response_type", "code")
+	query.Set("redirect_uri", c.RedirectURI)
+	query.Set("client_id", c.ClientID)
+	query.Set("scope", scope)
+	query.Set("state", state)
+	baseURL.RawQuery = query.Encode()
+
+	c.AuthURL = baseURL.String()
+	return c.AuthURL, state, nil
 }
 
 // ExchangeCodeForToken exchanges the authorization code for an access token
@@ -107,13 +110,7 @@ func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*T
 
 // GetAuthCode is used to get an auth code that can be exchanged for a token
 func (c *AuthClient) GetAuthCode() error {
-	data := url.Values{
-		"response_type": {"code"},
-		"redirect_uri":  {c.RedirectURI},
-		"client_id":     {c.ClientID},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, c.AuthURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest(http.MethodGet, c.AuthURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create auth request: %w", err)
 	}

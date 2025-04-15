@@ -77,16 +77,21 @@ func main() {
 
 func AuthorizationCodeFlow() {
 	fmt.Println("[Client] Started auth flow")
-	tls, err := NewSSLClient("server.crt")
-	if err != nil {
-		panic(err)
+	// tls, err := NewSSLClient("server.crt")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	cli := &http.Client{
+		Timeout: 3 * time.Second,
 	}
 	client := &AuthClient{
-		ClientID:    "test_client",
-		RedirectURI: "https://localhost:8081",
-		AuthURL:     "https://localhost:8082/authorize",
-		TokenURL:    "https://localhost:8082/oauth/token",
-		Client:      tls,
+		ClientID: "test_client",
+		// NOTE: remember to put https back
+		RedirectURI: "http://localhost:8081/callback",
+		AuthURL:     "http://localhost:8082/authorize",
+		TokenURL:    "http://localhost:8082/oauth/token",
+		// Client:      tls,
+		Client: cli,
 	}
 	// Step 1: Build the auth URL and redirect the user to the auth server
 	authURL, state, err := client.BuildAuthorizationURL("posts read")
@@ -122,7 +127,7 @@ func AuthorizationCodeFlow() {
 	// Step 3: Exchange the auth code for an access token
 }
 
-// TODO: move to pkg
+// TODO: move to pkg if it can be reused by other flows
 func callback(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("[Client] Callback Received")
 	code := r.URL.Query().Get("code")

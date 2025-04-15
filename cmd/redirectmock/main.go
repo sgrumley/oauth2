@@ -15,10 +15,12 @@ type OAuthConfig struct {
 }
 
 // Default configuration
+// Config should come from url query params not from this struct
 var config = OAuthConfig{
-	ClientID:     "client123",
-	RedirectURI:  "http://localhost:8080/callback",
-	AuthEndpoint: "https://auth-server.com/authorize", // Replace with your actual auth endpoint
+	ClientID: "client-id",
+	// RedirectURI: "http://localhost:8080/callback",
+	RedirectURI: "http://localhost:8081/callback",
+	// AuthEndpoint: "http://auth-server.com/authorize",
 }
 
 // Handler for the main page - shows login button
@@ -52,6 +54,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 // Handler for the OAuth callback
 func handleCallback(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("[Resource Mock] received call")
 	// Get the authorization code and state from the URL
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")

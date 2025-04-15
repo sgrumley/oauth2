@@ -3,7 +3,6 @@ package main
 // This is the auth server
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,13 +15,13 @@ var port = ":8082"
 
 func main() {
 	// TODO: look into this
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		},
-	}
+	// tlsConfig := &tls.Config{
+	// 	MinVersion: tls.VersionTLS12,
+	// 	CipherSuites: []uint16{
+	// 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	// 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	// 	},
+	// }
 
 	mux := http.NewServeMux()
 
@@ -34,13 +33,14 @@ func main() {
 	mux.HandleFunc("POST /oauth/token", authHandler.Token)
 
 	server := &http.Server{
-		Addr:      port,
-		TLSConfig: tlsConfig,
-		Handler:   mux,
+		Addr: port,
+		// TLSConfig: tlsConfig,
+		Handler: mux,
 	}
 
 	fmt.Println("listening on localhost" + port)
-	err := server.ListenAndServeTLS("server.crt", "server.key")
+	// err := server.ListenAndServeTLS("server.crt", "server.key")
+	err := server.ListenAndServe()
 	if err != nil {
 		log.Fatal(err)
 	}
