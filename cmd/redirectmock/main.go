@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
-// Configuration for our OAuth client
 type OAuthConfig struct {
 	ClientID     string
 	RedirectURI  string
@@ -15,79 +15,90 @@ type OAuthConfig struct {
 }
 
 // Default configuration
-// Config should come from url query params not from this struct
 var config = OAuthConfig{
-	ClientID: "client-id",
-	// RedirectURI: "http://localhost:8080/callback",
+	ClientID:    "client-id",
 	RedirectURI: "http://localhost:8081/callback",
-	// AuthEndpoint: "http://auth-server.com/authorize",
 }
 
-// Handler for the main page - shows login button
+// Handler for the main page - shows login form
 func handleHome(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, homeHTML)
 }
 
-// Handler for initiating the OAuth flow
-func handleLogin(w http.ResponseWriter, r *http.Request) {
-	// Generate a random state parameter to mitigate CSRF attacks
-	state := "xyz123" // In a real implementation, use a secure random generator
-
-	// Build the authorization URL
-	authURL, err := url.Parse(config.AuthEndpoint)
-	if err != nil {
-		http.Error(w, "Invalid auth endpoint URL", http.StatusInternalServerError)
+// Handler for processing the login form submission
+func handleSubmitLogin(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("[Mock Login] submit logged")
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	query := authURL.Query()
-	query.Set("response_type", "code")
-	query.Set("client_id", config.ClientID)
-	query.Set("redirect_uri", config.RedirectURI)
-	query.Set("state", state)
-	query.Set("scope", "profile email")
-	authURL.RawQuery = query.Encode()
+	// Get query parameters from the referrer URL
+	referrer := r.Header.Get("Referer")
+	var state string
+	var redirectURI string
 
-	// Redirect to the authorization server
-	http.Redirect(w, r, authURL.String(), http.StatusFound)
+	if referrer != "" {
+		refURL, err := url.Parse(referrer)
+		if err == nil {
+			// Extract the state parameter from the referrer URL
+			state = refURL.Query().Get("state")
+			redirectURI = refURL.Query().Get("redirect_uri")
+		}
+	}
+
+	// Parse the form to get username/password
+	err := r.ParseForm()
+	if err != nil {
+		fmt.Fprintf(w, errorHTML, "Error parsing form data")
+		return
+	}
+
+	// Get username and password from the form
+	username := r.Form.Get("username")
+	password := r.Form.Get("password")
+
+	// In a real application, you would validate the credentials here
+	// For this demo, we'll just consider it a success if they provided any credentials
+	if username == "" || password == "" {
+		fmt.Fprintf(w, errorHTML, "Username and password are required")
+		return
+	}
+
+	// Build the callback URL
+	callbackURL := "http://localhost:8081/callback"
+	if redirectURI != "" {
+		callbackURL = redirectURI
+	}
+
+	// Add the state parameter if it exists
+	if state != "" {
+		if strings.Contains(callbackURL, "?") {
+			callbackURL += "&state=" + url.QueryEscape(state)
+		} else {
+			callbackURL += "?state=" + url.QueryEscape(state)
+		}
+	}
+
+	// Redirect to the callback URL
+	fmt.Println("[Mock Login] Redirected to " + callbackURL)
+	http.Redirect(w, r, callbackURL, http.StatusFound)
 }
 
-// Handler for the OAuth callback
-func handleCallback(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Resource Mock] received call")
-	// Get the authorization code and state from the URL
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-
-	// Check for errors in the callback
-	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		fmt.Fprintf(w, callbackErrorHTML, errMsg, errDesc)
-		return
-	}
-
-	// In a real implementation, validate state to prevent CSRF attacks
-	if state == "" {
-		http.Error(w, "Missing state parameter", http.StatusBadRequest)
-		return
-	}
-
-	// Display the callback data
-	fmt.Fprintf(w, callbackSuccessHTML,
-		r.URL.String(),
-		code,
-		state,
-	)
+// Handler for the login page - shows login form
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	// Store the query parameters in the session or use them directly
+	fmt.Fprintf(w, homeHTML)
 }
 
 func main() {
 	// Register route handlers
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/login", handleLogin)
-	http.HandleFunc("/callback", handleCallback)
+	http.HandleFunc("/submit-login", handleSubmitLogin)
 
 	// Start the server
 	port := ":8080"
-	fmt.Printf("OAuth Redirect Demo started at http://localhost%s\n", port)
+	fmt.Printf("Login Demo started at http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }

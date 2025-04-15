@@ -113,7 +113,7 @@ func AuthorizationCodeFlow() {
 	returnedState := <-stateChan
 	fmt.Printf("[Client] Auth Code: %s\n", authCode)
 
-	// Step 3: After the user is redirected back to the client, verify the state matches
+	// Step 3: After the user is redirected back to the client, verify the state matches and get token
 	handleCallback := func(code, returnedState string) {
 		fmt.Println("[Client] Calling /token")
 		token, err := client.ExchangeCodeForToken(code, returnedState, state)
@@ -124,7 +124,6 @@ func AuthorizationCodeFlow() {
 	}
 
 	handleCallback(authCode, returnedState)
-	// Step 3: Exchange the auth code for an access token
 }
 
 // TODO: move to pkg if it can be reused by other flows
@@ -137,12 +136,6 @@ func callback(w http.ResponseWriter, r *http.Request) {
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		errDesc := r.URL.Query().Get("error_description")
 		fmt.Fprintf(w, errMsg, errDesc)
-		return
-	}
-
-	// In a real implementation, validate state to prevent CSRF attacks
-	if state == "" {
-		http.Error(w, "Missing state parameter", http.StatusBadRequest)
 		return
 	}
 

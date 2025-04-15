@@ -1,3 +1,5 @@
+- Should the redirect in /auth be to the login page or the client provided uri
+  - where does the login page come into it and if it is currently correct, how do you get the auth code passed in ???
 - need to work on the mock page
 - Most of the variables need to be read in via config.yaml to make everything a bit cleaner
   - This probably includes the mocked database or some realistic form of DCR

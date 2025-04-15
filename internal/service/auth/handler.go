@@ -100,6 +100,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	clientID := r.URL.Query().Get("client_id")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
+	state := r.URL.Query().Get("state")
 
 	queryParams := r.URL.Query()
 	fmt.Println("All query parameters:", queryParams)
@@ -131,7 +132,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	h.store.SetAuthCode(clientID, code)
 
 	// TODO: if state was given it should also be returned
-	url := "http:localhost:8080/login" + "?code=" + code.Code + "&redirect_uri=" + redirectURI
+	url := "http:localhost:8080/login" + "?code=" + code.Code + "&redirect_uri=" + redirectURI + "&state=" + state
 	fmt.Println("[Server] Authorization redirected to " + url)
 	// TODO: update to authURL to var
 	// http.Redirect(w, r, url, http.StatusFound)
@@ -159,6 +160,7 @@ type TokenResponse struct {
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.2
 func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("[Server] Token request received")
 	err := r.ParseForm()
 	if err != nil {
 		// TODO: all the possible errors should be copied from spec and made variables to return

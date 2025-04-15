@@ -1,6 +1,5 @@
 package main
 
-// HTML templates
 const homeHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,6 +32,7 @@ const homeHTML = `<!DOCTYPE html>
             text-decoration: none;
             margin: 10px 0;
             cursor: pointer;
+            border: none;
         }
         .btn:hover {
             background-color: #2980b9;
@@ -43,6 +43,21 @@ const homeHTML = `<!DOCTYPE html>
             border-radius: 4px;
             overflow-x: auto;
         }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -50,25 +65,28 @@ const homeHTML = `<!DOCTYPE html>
         <h1>OAuth Redirect Flow Demo</h1>
         <p>This demo shows the OAuth 2.0 redirect flow.</p>
         
-        <h2>How it works:</h2>
-        <ol>
-            <li>Click the login button below (to mock entering a username and password)</li>
-            <li>You'll be redirected to the authorization server</li>
-            <li>After authorization, you'll be redirected back with a code</li>
-            <li>The code will be displayed on the callback page</li>
-        </ol>
-        
-        <a href="/login" class="btn">Login with OAuth</a>
+        <h2>Login</h2>
+        <form id="loginForm" method="post" action="/submit-login">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
     </div>
 </body>
 </html>`
 
-const callbackSuccessHTML = `<!DOCTYPE html>
+const successHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth Callback</title>
+    <title>Login Success</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -83,16 +101,8 @@ const callbackSuccessHTML = `<!DOCTYPE html>
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-        h1, h2 {
+        h1 {
             color: #2c3e50;
-        }
-        .url-bar {
-            background-color: #eee;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            word-break: break-all;
-            margin: 10px 0;
         }
         .success-icon {
             color: #2ecc71;
@@ -113,48 +123,27 @@ const callbackSuccessHTML = `<!DOCTYPE html>
         .btn:hover {
             background-color: #2980b9;
         }
-        .params {
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-left: 3px solid #3498db;
-            margin: 10px 0;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>OAuth Callback Received</h1>
+        <h1>Login Successful</h1>
         
         <div class="success-icon">✓</div>
         
-        <h2>Callback URL</h2>
-        <div class="url-bar">%s</div>
+        <p>You have successfully logged in.</p>
         
-        <h2>Authorization Code</h2>
-        <div class="params">
-            <p><strong>code:</strong> %s</p>
-            <p><strong>state:</strong> %s</p>
-        </div>
-        
-        <h2>Next Steps</h2>
-        <p>In a real OAuth implementation, the application would now:</p>
-        <ol>
-            <li>Exchange this authorization code for an access token</li>
-            <li>Use the access token to make API requests</li>
-            <li>Refresh the token when it expires</li>
-        </ol>
-        
-        <a href="/" class="btn">Start Over</a>
+        <a href="/" class="btn">Return to Home</a>
     </div>
 </body>
 </html>`
 
-const callbackErrorHTML = `<!DOCTYPE html>
+const errorHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth Error</title>
+    <title>Login Error</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -195,13 +184,11 @@ const callbackErrorHTML = `<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <h1>OAuth Authorization Error</h1>
+        <h1>Login Error</h1>
         
         <div class="error-icon">✗</div>
         
-        <h2>Error Details</h2>
-        <p><strong>Error:</strong> %s</p>
-        <p><strong>Description:</strong> %s</p>
+        <p>An error occurred during login: %s</p>
         
         <a href="/" class="btn">Try Again</a>
     </div>
