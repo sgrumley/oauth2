@@ -1,16 +1,32 @@
 # OAUTH2 Basic Implementation
-## Protocols
+
+## Overview
+This project is for learning purposes only.
+It is written with the internsion of deepening the understanding of the server side roles in different OAuth2 flows
+
+There are many different flow to try out. Each one has a readme with instructions for how to run the demo
+Services used: 
+ - Mocked login page:8080
+ - Client:8081 (callback endpoint)
+ - Authorization Service:8082 (token, authorization, login... endpoints)
+
+## Standards
 - OAuth2
-- OpenID
-- OIDC OpenID Connect (is this different?)
+- OIDC OpenID Connect 
 - Fapi2.0
+
+## Flows
+- Authorization Code 
+- Implicit
+- Device Code 
+- PKCE
 
 ## Registration
 Before any endpoints are hit. A `Client ID` and `Client Secret` must be provided to the client and store in this servers DB.
 TODO: create an endpoint to generate this, it should also take information from the client (redirect_uri, name, ...)
 
 ## Requests
-TODO: setup the cmd/client to make the requests
+TODO: setup the cmd clients to read request data from yaml config
 
 ### Authorize
 ``` http
@@ -33,6 +49,7 @@ redirect_uri=http://localhost:8081/callback
 ```
 
 ## References
+Code is docmented with RFC references where applicable
 - [oauth2 overview](https://auth0.com/intro-to-iam/what-is-oauth-2)
 - [oauth2 deeper look](https://www.oauth.com/)
 - [overview of all specs](https://www.oauth.com/oauth2-servers/map-oauth-2-0-specs/)

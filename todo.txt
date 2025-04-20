@@ -1,3 +1,15 @@
-Review readme references and rebuild the bases of the handlers and fields
-Turn Access Token into a JWT
-Add a third service that has resources and uses the auth server to grant access
+- Most of the variables need to be read in via config.yaml to make everything a bit cleaner
+  - This probably includes the mocked database or some realistic form of DCR
+  - This allows an update in one place 
+- Turn TLS on and get working
+- Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
+  - Clean up the code and make references back to spec
+- Add Client Registration
+  - make use of client secret
+- Turn Access Token into a JWT
+
+- consider moving towards a docker setup??
+
+-> Once above complete move on to next flow
+- Maybe add CIBA (back channel auth)
+- Add MTLS

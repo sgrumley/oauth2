@@ -1,0 +1,46 @@
+version: '3'
+
+tasks:
+  gen-cert:
+    desc: Generate TLS certificate
+    cmds:
+      # Eventually look at creating a conf file for creating the key openssl.conf
+      - openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName = DNS:localhost,IP:127.0.0.1"
+
+  server-start:
+    desc: Start the server
+    cmds:
+      - go run ./cmd/server/...
+
+  frontend-start:
+    desc: Start the frontend
+    cmds:
+      - go run ./cmd/redirectmock/...
+
+  client-start:
+    desc: Start the client
+    cmds:
+      - go run ./cmd/client/...
+
+  clean:
+    desc: Clean up running processes
+    cmds:
+      # server
+      - sudo lsof -t -i:8082 | xargs -r kill -9
+      # redirect mock
+      - sudo lsof -t -i:8080 | xargs -r kill -9
+      # client
+      - sudo lsof -t -i:8081 | xargs -r kill -9
+      - sleep 2
+    silent: true
+
+  auth-code-flow:
+    desc: Run the full auth code flow
+    deps: [clean, server-start, frontend-start]
+    # server and frontend need to be running when client is run
+    cmds:
+      - task: clean
+      - task: server-start
+      - task: frontend-start
+      - task: client-start
+      - task: clean
