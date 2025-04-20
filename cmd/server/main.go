@@ -9,19 +9,13 @@ import (
 
 	"github.com/sgrumley/oauth/internal/service/auth"
 	"github.com/sgrumley/oauth/internal/store"
+	"github.com/sgrumley/oauth/pkg/middleware"
 )
 
 var port = ":8082"
 
 func main() {
-	// TODO: look into this
-	// tlsConfig := &tls.Config{
-	// 	MinVersion: tls.VersionTLS12,
-	// 	CipherSuites: []uint16{
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	// 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	// 	},
-	// }
+	// tlsConfig := web.GetDefaultConfig()
 
 	mux := http.NewServeMux()
 
@@ -32,10 +26,15 @@ func main() {
 	mux.HandleFunc("GET /authorize", authHandler.Authorization)
 	mux.HandleFunc("POST /oauth/token", authHandler.Token)
 
+	mux.HandleFunc("GET /callback", auth.Callback)
+	mux.HandleFunc("POST /api/login", auth.HandleLogin)
+
+	wrappedMux := middleware.CorsMiddleware(mux)
+
 	server := &http.Server{
 		Addr: port,
 		// TLSConfig: tlsConfig,
-		Handler: mux,
+		Handler: wrappedMux,
 	}
 
 	fmt.Println("listening on localhost" + port)

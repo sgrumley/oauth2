@@ -1,14 +1,14 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/sgrumley/oauth/pkg/auth"
 )
 
 type AuthClient struct {
@@ -28,24 +28,14 @@ type TokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
-// GenerateState creates a random state parameter for CSRF protection
-// TODO: move to package for sharing
-func generateState() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
-}
-
 // BuildAuthorizationURL creates the authorization URL for the initial redirect
 func (c *AuthClient) BuildAuthorizationURL(scope string) (string, string, error) {
-	state, err := generateState()
+	state, err := auth.GenerateState()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate state: %w", err)
 	}
 
-	baseURL, err := url.Parse(c.AuthURL)
+	baseURL, _ := url.Parse(c.AuthURL)
 
 	query := baseURL.Query()
 	query.Set("response_type", "code")
@@ -57,6 +47,37 @@ func (c *AuthClient) BuildAuthorizationURL(scope string) (string, string, error)
 
 	c.AuthURL = baseURL.String()
 	return c.AuthURL, state, nil
+}
+
+// GetAuthCode is used to get an auth code that can be exchanged for a token
+func (c *AuthClient) GetAuthCode() error {
+	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// defer cancel()
+	// req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.AuthURL, nil)
+	req, err := http.NewRequest(http.MethodGet, c.AuthURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create auth request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("auth request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	fmt.Println("[Client] response status code: ", resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	fmt.Println("[Client] auth response: ", string(body))
+	return nil
 }
 
 // ExchangeCodeForToken exchanges the authorization code for an access token
@@ -89,7 +110,9 @@ func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*T
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -106,30 +129,4 @@ func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*T
 	}
 
 	return &tokenResp, nil
-}
-
-// GetAuthCode is used to get an auth code that can be exchanged for a token
-func (c *AuthClient) GetAuthCode() error {
-	req, err := http.NewRequest(http.MethodGet, c.AuthURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create auth request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("auth request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	fmt.Println("[Client] response status code: ", resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	fmt.Println("[Client] auth response: ", string(body))
-	return nil
 }

@@ -25,7 +25,7 @@ func New() *Store {
 	store.clients["test_client"] = models.Client{
 		ID:          "test_client",
 		Secret:      "test_secret",
-		RedirectURI: "http://localhost:8081/callback",
+		RedirectURI: "http://localhost:8081/callback", // TODO: should enable comma seperated options and request must be one of them
 	}
 
 	return store
@@ -45,8 +45,11 @@ func (s *Store) SetToken(tok models.Token) {
 	s.mu.Unlock()
 }
 
-func (s *Store) GetAuthCode(code string) (models.AuthCode, error) {
-	acode, ok := s.authCodes[code]
+func (s *Store) GetAuthCode(clientID string) (models.AuthCode, error) {
+	for key, code := range s.authCodes {
+		fmt.Println("available codes ", key, " ", code)
+	}
+	acode, ok := s.authCodes[clientID]
 	if !ok {
 		return models.AuthCode{}, fmt.Errorf("auth code not found")
 	}

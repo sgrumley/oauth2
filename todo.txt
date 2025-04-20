@@ -1,15 +1,15 @@
-- Should the redirect in /auth be to the login page or the client provided uri
-  - where does the login page come into it and if it is currently correct, how do you get the auth code passed in ???
-- need to work on the mock page
 - Most of the variables need to be read in via config.yaml to make everything a bit cleaner
   - This probably includes the mocked database or some realistic form of DCR
-
-- add tls back after everything works
-- Review readme references and rebuild the bases of the handlers and fields
+  - This allows an update in one place 
+- Turn TLS on and get working
+- Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
+  - Clean up the code and make references back to spec
+- Add Client Registration
+  - make use of client secret
 - Turn Access Token into a JWT
-- Look into why the redirect page is needed? whose page is it... use the template
-- Add a third service that has resources and uses the auth server to grant access
-- create variables for service addresses
+
 - consider moving towards a docker setup??
 
-After auth flow is complete all code bases need a huge clean and some documentation before moving on to the next flow
+-> Once above complete move on to next flow
+- Maybe add CIBA (back channel auth)
+- Add MTLS

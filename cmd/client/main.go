@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,41 +8,11 @@ import (
 	"time"
 )
 
-// TODO: move to pkg
-func NewSSLClient(serverCertPath string) (*http.Client, error) {
-	// Load the self-signed certificate
-	serverCert, err := os.ReadFile(serverCertPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load server certificate: %w", err)
-	}
-
-	// Create a certificate pool and add the server certificate
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(serverCert) {
-		return nil, fmt.Errorf("failed to add server certificate to pool")
-	}
-
-	// Configure TLS
-	tlsConfig := &tls.Config{
-		RootCAs:    certPool,
-		MinVersion: tls.VersionTLS12,
-	}
-
-	// Create HTTP client with TLS configuration
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   3 * time.Second,
-	}, nil
-}
-
 var (
 	port         = ":8081"
 	authCodeChan = make(chan string)
 	stateChan    = make(chan string)
+	scopes       = "posts read"
 )
 
 func main() {
@@ -82,7 +50,7 @@ func AuthorizationCodeFlow() {
 	// 	panic(err)
 	// }
 	cli := &http.Client{
-		Timeout: 3 * time.Second,
+		Timeout: 3 * time.Minute,
 	}
 	client := &AuthClient{
 		ClientID: "test_client",
@@ -94,7 +62,7 @@ func AuthorizationCodeFlow() {
 		Client: cli,
 	}
 	// Step 1: Build the auth URL and redirect the user to the auth server
-	authURL, state, err := client.BuildAuthorizationURL("posts read")
+	authURL, state, err := client.BuildAuthorizationURL(scopes)
 	if err != nil {
 		panic(err)
 	}
@@ -120,7 +88,9 @@ func AuthorizationCodeFlow() {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("[Client] Completed flow with Access Token: %s\n", token.AccessToken)
+		fmt.Printf("[Client] flow completed with Token: \n\taccess_token: %s\n\trefresh_token: %s\n\texpire_time: %v\n\ttoken_type: %s\n\tscope: %s", token.AccessToken, token.RefreshToken, token.ExpiresIn, token.TokenType, token.Scope)
+		fmt.Println("Shutting down client")
+		os.Exit(1)
 	}
 
 	handleCallback(authCode, returnedState)

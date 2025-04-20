@@ -14,7 +14,7 @@ func Respond(w http.ResponseWriter, status int, errorType string) {
 	})
 }
 
-func RespondContent(w http.ResponseWriter, status int, data interface{}) {
+func RespondContent(w http.ResponseWriter, status int, data any) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(status)
 	err := json.NewEncoder(w).Encode(data)
