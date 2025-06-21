@@ -20,7 +20,7 @@ tasks:
   client-start:
     desc: Start the client
     cmds:
-      - go run ./cmd/client/...
+      - go run ./cmd/flows/authcode/...
 
   clean:
     desc: Clean up running processes

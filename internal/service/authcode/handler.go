@@ -1,6 +1,7 @@
-package auth
+package authcode
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,7 +15,8 @@ import (
 var successChan = make(chan bool)
 
 type Handler struct {
-	store AuthStore
+	loginURL string
+	store    AuthStore
 }
 
 type AuthStore interface {
@@ -25,9 +27,10 @@ type AuthStore interface {
 	SetToken(tok models.Token)
 }
 
-func NewHandler(s AuthStore) *Handler {
+func NewHandler(s AuthStore, loginURL string) *Handler {
 	return &Handler{
-		store: s,
+		store:    s,
+		loginURL: loginURL,
 	}
 }
 
@@ -92,6 +95,9 @@ errors:
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
 	fmt.Println("[Server] Authorization request received")
 	// if r.TLS != nil {
 	// 	log.Printf("TLS Version: %x, Cipher Suite: %s",
@@ -106,7 +112,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 
 	queryParams := r.URL.Query()
 	fmt.Println("All query parameters:", queryParams)
-	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s", responseType, clientID, redirectURI)
+	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s\n", responseType, clientID, redirectURI)
 	if responseType != "code" && responseType != "token" {
 		fmt.Println("[Server] Authorization response type: " + responseType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
@@ -126,7 +132,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "http:localhost:8080/login"
+	url := "loginURL" // http:localhost:8080/login
 	fmt.Println("[Server] Authorization redirected to " + url)
 	// NOTE: terminal based flow cannot redirect
 	if err := browser.OpenBrowser(url); err != nil {
@@ -134,7 +140,12 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// wait for the login page to return true
-	<-successChan
+	select {
+	case <-ctx.Done():
+		web.Respond(w, http.StatusInternalServerError, "server timeout")
+		return
+	case <-successChan:
+	}
 
 	code, err := token.GenerateAuthCode(clientID, redirectURI)
 	if err != nil {

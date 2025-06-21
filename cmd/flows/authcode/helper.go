@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sgrumley/oauth/pkg/auth"
+	"github.com/sgrumley/oauth/pkg/logger"
 )
 
 type AuthClient struct {
@@ -50,7 +52,7 @@ func (c *AuthClient) BuildAuthorizationURL(scope string) (string, string, error)
 }
 
 // GetAuthCode is used to get an auth code that can be exchanged for a token
-func (c *AuthClient) GetAuthCode() error {
+func (c *AuthClient) GetAuthCode(ctx context.Context) error {
 	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	// defer cancel()
 	// req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.AuthURL, nil)
@@ -69,19 +71,19 @@ func (c *AuthClient) GetAuthCode() error {
 		_ = resp.Body.Close()
 	}()
 
-	fmt.Println("[Client] response status code: ", resp.StatusCode)
+	logger.Info(ctx, "[Client] response status code: ", resp.StatusCode)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	fmt.Println("[Client] auth response: ", string(body))
+	logger.Info(ctx, "[Client] auth response: ", string(body))
 	return nil
 }
 
 // ExchangeCodeForToken exchanges the authorization code for an access token
-func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*TokenResponse, error) {
+func (c *AuthClient) ExchangeCodeForToken(ctx context.Context, code, state, expectedState string) (*TokenResponse, error) {
 	// Verify state parameter to prevent CSRF
 	if state != expectedState {
 		return nil, fmt.Errorf("state mismatch: expected %s, got %s", expectedState, state)
@@ -94,7 +96,6 @@ func (c *AuthClient) ExchangeCodeForToken(code, state, expectedState string) (*T
 		"client_id":    {c.ClientID},
 	}
 
-	// If client secret is provided, include it
 	if c.ClientSecret != "" {
 		data.Set("client_secret", c.ClientSecret)
 	}
