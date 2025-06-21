@@ -13,3 +13,5 @@
 -> Once above complete move on to next flow
 - Maybe add CIBA (back channel auth)
 - Add MTLS
+- Can I optionally get a prompt in the terminal for user/pass instead of browser?
+- move into docker + turn it into a project I can use within home app

@@ -11,9 +11,9 @@ Services used:
  - Authorization Service:8082 (token, authorization, login... endpoints)
 
 ## Standards
-- OAuth2
-- OIDC OpenID Connect 
-- Fapi2.0
+- OAuth2 (refer to rfcs)
+- OIDC OpenID Connect https://openid.net/specs/openid-connect-core-1_0.html
+- Fapi2.0 (https://openid.net/specs/openid-financial-api-part-1-1_0.html)
 
 ## Flows
 - Authorization Code 
