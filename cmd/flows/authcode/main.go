@@ -31,7 +31,7 @@ type AuthCodeConfig struct {
 func main() {
 	ctx := context.Background()
 	log := logger.NewLogger()
-	logger.AddLoggerContext(ctx, log.Logger)
+	ctx = logger.AddLoggerContext(ctx, log.Logger)
 
 	env, err := config.LoadEnvVarFile()
 	if err != nil {
