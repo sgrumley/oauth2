@@ -43,7 +43,10 @@ func NewClient(clientID, redirectURI, tokenURL, authURL string, httpClient *http
 }
 
 func (c *Client) buildAuthorizationURL(scope string, state string) (string, error) {
-	baseURL, _ := url.Parse(c.AuthURL)
+	baseURL, err := url.Parse(c.AuthURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid AuthURL: %w", err)
+	}
 
 	query := baseURL.Query()
 	query.Set("response_type", "code")
