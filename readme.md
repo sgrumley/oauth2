@@ -2,7 +2,7 @@
 
 ## Overview
 This project is for learning purposes only.
-It is written with the intension of deepening the understanding of the server side roles in different OAuth2 flows
+It is written with the intention of deepening the understanding of the server side roles in different OAuth2 flows
 
 ## Standards
 - OAuth2
