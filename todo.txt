@@ -5,6 +5,7 @@
   - make use of client secret
 - Turn Access Token into a JWT + add JWKs -> use golang-jwt
 - Decide on naming. Login/mock/frontend. authcode/authcodeclient. server/
+- Some minor fixes needed for authcode
 
 -> Once above complete move on to next flow
 - Add MTLS
