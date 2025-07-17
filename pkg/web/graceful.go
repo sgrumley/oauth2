@@ -57,6 +57,8 @@ func HandleShutdown(ctx context.Context, cfg *exitConfig) <-chan error {
 				done <- nil
 			}
 		case <-ctxTTL.Done():
+			done <- fmt.Errorf("graceful shutdown interrupted or deadline exceeded: %w", context.Cause(ctxTTL))
+		case <-ctx.Done():
 			done <- fmt.Errorf("graceful shutdown interrupted or deadline exceeded: %w", context.Cause(ctx))
 		}
 	}()

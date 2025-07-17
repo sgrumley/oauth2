@@ -113,7 +113,8 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 	fmt.Println("All query parameters:", queryParams)
 	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s\n", responseType, clientID, redirectURI)
-	if responseType != "code" && responseType != "token" {
+	// NOTE: only supporting code
+	if responseType != "code" {
 		fmt.Println("[Server] Authorization response type: " + responseType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
 		return
@@ -132,10 +133,9 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "loginURL" // http:localhost:8080/login
-	fmt.Println("[Server] Authorization redirected to " + url)
+	fmt.Println("[Server] Authorization redirected to " + h.loginURL)
 	// NOTE: terminal based flow cannot redirect
-	if err := browser.OpenBrowser(url); err != nil {
+	if err := browser.OpenBrowser(h.loginURL); err != nil {
 		fmt.Println("failed to open browser")
 	}
 

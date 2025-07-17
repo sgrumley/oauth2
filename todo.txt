@@ -1,10 +1,9 @@
-- Look at making the client use more like a library. AuthClient should be out of package and have a NewClient()
 - Turn TLS on and get working
 - Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
   - Clean up the code and make references back to spec
 - Add Client Registration
   - make use of client secret
-- Turn Access Token into a JWT
+- Turn Access Token into a JWT + add JWKs -> use golang-jwt
 - Decide on naming. Login/mock/frontend. authcode/authcodeclient. server/
 
 -> Once above complete move on to next flow

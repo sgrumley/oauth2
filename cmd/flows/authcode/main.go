@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/sgrumley/oauth/pkg/auth"
+	"github.com/sgrumley/oauth/pkg/authcode"
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/logger"
 	"github.com/sgrumley/oauth/pkg/web"
@@ -55,6 +58,8 @@ func main() {
 
 	logger.Info(ctx, "[Client] listening on localhost"+env.AuthCodePort)
 	if err := web.ListenAndServe(ctx, server); err != nil {
+		logger.Error(ctx, "server error", err)
+		return
 	}
 }
 
@@ -70,34 +75,34 @@ func main() {
 func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	logger.Info(ctx, "[Client] Started auth flow")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// defer cancel()
 
+	// TODO: how can I get the main process to shutdown if this returns
+	defer func() {
+		<-ctx.Done()
+		defer cancel()
+	}()
 	// tls, err := NewSSLClient("server.crt")
 	// if err != nil {
 	// 	panic(err)
 	// }
+
 	cli := &http.Client{
 		Timeout: 3 * time.Minute,
 	}
-	client := &AuthClient{
-		ClientID:    cfg.ClientID,
-		RedirectURI: cfg.RedirectURI,
-		AuthURL:     cfg.AuthURL,
-		TokenURL:    cfg.TokenURL,
-		// Client:      tls,
-		Client: cli,
-	}
-	// Step 1: Build the auth URL and redirect the user to the auth server
-	authURL, state, err := client.BuildAuthorizationURL(scopes)
+
+	// NOTE: should this be handled in the package??
+	state, err := auth.GenerateState()
 	if err != nil {
-		panic(err)
+		logger.Fatal(ctx, "failed to generate state", err)
 	}
 
+	client := authcode.NewClient(cfg.ClientID, cfg.RedirectURI, cfg.TokenURL, cfg.AuthURL, cli)
+
 	// Step 2: Make auth code request
-	logger.Info(ctx, "[Client] Calling "+authURL)
-	err = client.GetAuthCode(ctx)
-	if err != nil {
-		panic(err)
+	if err := client.GetAuthorizationCode(ctx, scopes, state); err != nil {
+		logger.Error(ctx, "get auth code request failed", err)
+		return
 	}
 
 	logger.Info(ctx, "[Client] Waiting for authorization code")
@@ -109,7 +114,7 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	}
 	authCode := <-authCodeChan
 	returnedState := <-stateChan
-	logger.Info(ctx, "[Client] Auth Code: %s\n", authCode)
+	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
 	logger.Info(ctx, "[Client] Calling /token")
@@ -117,7 +122,14 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
-	logger.Info(ctx, "[Client] flow completed with Token: \n\taccess_token: %s\n\trefresh_token: %s\n\texpire_time: %v\n\ttoken_type: %s\n\tscope: %s", token.AccessToken, token.RefreshToken, token.ExpiresIn, token.TokenType, token.Scope)
+	logger.Info(ctx, "[Client] flow completed with Token",
+		slog.String("access_token", token.AccessToken),
+		slog.String("refresh_token", token.RefreshToken),
+		slog.Int("expire_time", token.ExpiresIn),
+		slog.String("token_type", token.TokenType),
+		slog.String("scope", token.Scope),
+	)
+
 	logger.Info(ctx, "Shutting down client")
 	os.Exit(1)
 }
