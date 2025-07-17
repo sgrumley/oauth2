@@ -1,15 +1,13 @@
-- Most of the variables need to be read in via config.yaml to make everything a bit cleaner
-  - This probably includes the mocked database or some realistic form of DCR
-  - This allows an update in one place 
 - Turn TLS on and get working
 - Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
   - Clean up the code and make references back to spec
 - Add Client Registration
   - make use of client secret
-- Turn Access Token into a JWT
-
-- consider moving towards a docker setup??
+- Turn Access Token into a JWT + add JWKs -> use golang-jwt
+- Decide on naming. Login/mock/frontend. authcode/authcodeclient. server/
+- Some minor fixes needed for authcode
 
 -> Once above complete move on to next flow
-- Maybe add CIBA (back channel auth)
 - Add MTLS
+- PKCE
+- OIDC

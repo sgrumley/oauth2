@@ -1,0 +1,5 @@
+# Port: "8081"
+ClientID: "test_client"
+RedirectURI: "http://localhost:8081/callback"
+AuthURL: "http://localhost:8082/authorize"
+TokenURL: "http://localhost:8082/oauth/token"

@@ -11,7 +11,7 @@ func OpenBrowser(url string) error {
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		return fmt.Errorf("unsupported platform: windows")
 	case "darwin":
 		cmd = exec.Command("open", url)
 	case "linux":

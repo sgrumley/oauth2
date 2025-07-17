@@ -1,46 +1,52 @@
 package main
 
-// This is the auth server
-
 import (
-	"fmt"
+	"context"
 	"log"
 	"net/http"
 
-	"github.com/sgrumley/oauth/internal/service/auth"
+	"github.com/sgrumley/oauth/internal/service/authcode"
 	"github.com/sgrumley/oauth/internal/store"
+	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/middleware"
+	"github.com/sgrumley/oauth/pkg/web"
 )
 
-var port = ":8082"
+type ServerConfig struct {
+	LoginURL string `yaml:"loginURL"`
+}
 
 func main() {
+	ctx := context.Background()
 	// tlsConfig := web.GetDefaultConfig()
-
-	mux := http.NewServeMux()
+	env, err := config.LoadEnvVarFile()
+	if err != nil {
+		log.Fatal("failed to load environment config", err)
+	}
+	cfg, err := config.LoadYAMLDocument[ServerConfig](env.ServerConfig)
+	if err != nil {
+		log.Fatal("failed to load yaml config: ", err)
+	}
 
 	store := store.New()
-	authHandler := auth.NewHandler(store)
+	authHandler := authcode.NewHandler(store, cfg.LoginURL)
 
 	// Routes
+	mux := http.NewServeMux()
 	mux.HandleFunc("GET /authorize", authHandler.Authorization)
 	mux.HandleFunc("POST /oauth/token", authHandler.Token)
 
-	mux.HandleFunc("GET /callback", auth.Callback)
-	mux.HandleFunc("POST /api/login", auth.HandleLogin)
+	mux.HandleFunc("GET /callback", authcode.Callback)
+	mux.HandleFunc("POST /api/login", authcode.HandleLogin)
 
 	wrappedMux := middleware.CorsMiddleware(mux)
 
 	server := &http.Server{
-		Addr: port,
+		Addr: env.ServerHost + env.ServerPort,
 		// TLSConfig: tlsConfig,
 		Handler: wrappedMux,
 	}
 
-	fmt.Println("listening on localhost" + port)
+	web.ListenAndServe(ctx, server)
 	// err := server.ListenAndServeTLS("server.crt", "server.key")
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Fatal(err)
-	}
 }

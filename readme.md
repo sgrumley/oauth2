@@ -2,13 +2,7 @@
 
 ## Overview
 This project is for learning purposes only.
-It is written with the internsion of deepening the understanding of the server side roles in different OAuth2 flows
-
-There are many different flow to try out. Each one has a readme with instructions for how to run the demo
-Services used: 
- - Mocked login page:8080
- - Client:8081 (callback endpoint)
- - Authorization Service:8082 (token, authorization, login... endpoints)
+It is written with the intention of deepening the understanding of the server side roles in different OAuth2 flows
 
 ## Standards
 - OAuth2
@@ -19,6 +13,8 @@ Services used:
 - Authorization Code 
 - Implicit
 - Device Code 
+- Backchannel CIBA
+- Fapi2.0
 - PKCE
 
 ## Registration
@@ -27,6 +23,7 @@ TODO: create an endpoint to generate this, it should also take information from 
 
 ## Requests
 TODO: setup the cmd clients to read request data from yaml config
+TODO: have a readme for each flow
 
 ### Authorize
 ``` http
