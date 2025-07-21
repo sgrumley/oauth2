@@ -91,7 +91,6 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		Timeout: 3 * time.Minute,
 	}
 
-	// NOTE: should this be handled in the package??
 	state, err := auth.GenerateState()
 	if err != nil {
 		logger.Fatal(ctx, "failed to generate state", err)

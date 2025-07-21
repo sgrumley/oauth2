@@ -1,4 +1,4 @@
-package authcode
+package pkce
 
 import (
 	"encoding/json"

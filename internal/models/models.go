@@ -17,10 +17,12 @@ type Token struct {
 }
 
 type AuthCode struct {
-	Code        string
-	ClientID    string
-	ExpiresAt   time.Time
-	RedirectURI string
+	Code                string
+	ClientID            string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	ExpiresAt           time.Time
+	RedirectURI         string
 }
 
 // Types based on go/x/oauth2

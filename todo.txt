@@ -7,6 +7,8 @@
 - Decide on naming. Login/mock/frontend. authcode/authcodeclient. server/
 - Some minor fixes needed for authcode
 
+PKCE: should be build over the top of auth code. It is just an extension of the code flow
+
 -> Once above complete move on to next flow
 - Add MTLS
 - PKCE

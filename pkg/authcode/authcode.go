@@ -62,7 +62,6 @@ func (c *Client) buildAuthorizationURL(scope string, state string) (string, erro
 
 // GetAuthCode is used to get an auth code that can be exchanged for a token
 func (c *Client) GetAuthorizationCode(ctx context.Context, scope string, state string) error {
-	// TODO: state should probably be passed in??
 	_, err := c.buildAuthorizationURL(scope, state)
 	if err != nil {
 		return err

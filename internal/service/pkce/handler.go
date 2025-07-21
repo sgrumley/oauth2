@@ -1,7 +1,9 @@
-package authcode
+package pkce
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"time"
@@ -29,13 +31,10 @@ type AuthStore interface {
 
 func NewHandler(s AuthStore, loginURL string) *Handler {
 	return &Handler{
-		store:    s,
-		loginURL: loginURL,
+		store: s,
 	}
 }
 
-// TODO: add client secret
-// https://www.rfc-editor.org/rfc/rfc6749#section-4.2.1
 type AuthRequest struct {
 	// Tells the authorization server which grant to execute.
 	// The value MUST be one of "code" for requesting an authorization code -> https://www.rfc-editor.org/rfc/rfc6749#section-4.1.1
@@ -43,6 +42,10 @@ type AuthRequest struct {
 	ResponseType string `json:"response_type"`
 	// The ID of the application that asks for authorization.
 	ClientID string `json:"client_id"`
+	// REQUIRED.  Code challenge.
+	CodeChallenge string `json:"code_challenge"`
+	// OPTIONAL, defaults to "plain" if not present in the request.  Code verifier transformation method is "S256" or "plain".
+	CodeChallengeMethod string `json:"code_challenge_method"`
 	// Holds a URL. A successful response from this endpoint results in a redirect to this URL.
 	RedirectURI string `json:"redirect_uri"`
 	// A space-delimited list of permissions that the application requires.
@@ -51,69 +54,25 @@ type AuthRequest struct {
 	State string `json:"state"`
 }
 
-// https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2
 type AuthResponse struct {
 	Code  string `json:"code"`
 	State string `json:"state"` // required only if it was present in the request
 }
 
-/*
-errors:
-         invalid_request
-               The request is missing a required parameter, includes an
-               invalid parameter value, includes a parameter more than
-               once, or is otherwise malformed.
-
-         unauthorized_client
-               The client is not authorized to request an authorization
-               code using this method.
-
-         access_denied
-               The resource owner or authorization server denied the
-               request.
-
-         unsupported_response_type
-               The authorization server does not support obtaining an
-               authorization code using this method.
-
-         invalid_scope
-               The requested scope is invalid, unknown, or malformed.
-
-         server_error
-               The authorization server encountered an unexpected
-               condition that prevented it from fulfilling the request.
-               (This error code is needed because a 500 Internal Server
-               Error HTTP status code cannot be returned to the client
-               via an HTTP redirect.)
-
-         temporarily_unavailable
-               The authorization server is currently unable to handle
-               the request due to a temporary overloading or maintenance
-               of the server.  (This error code is needed because a 503
-               Service Unavailable HTTP status code cannot be returned
-               to the client via an HTTP redirect.)
-*/
-
-// https://www.rfc-editor.org/rfc/rfc6749#section-3.1
 func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
 	fmt.Println("[Server] Authorization request received")
-	// if r.TLS != nil {
-	// 	log.Printf("TLS Version: %x, Cipher Suite: %s",
-	// 		r.TLS.Version,
-	// 		tls.CipherSuiteName(r.TLS.CipherSuite))
-	// }
-
 	clientID := r.URL.Query().Get("client_id")
+	codeChallenge := r.URL.Query().Get("code_challenge")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
 	state := r.URL.Query().Get("state")
 
 	queryParams := r.URL.Query()
 	fmt.Println("All query parameters:", queryParams)
-	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s\n", responseType, clientID, redirectURI)
+	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tcode_challenge: %s\n\tredirect_uri: %s\n", responseType, codeChallenge, redirectURI)
 	// NOTE: only supporting code
 	if responseType != "code" {
 		fmt.Println("[Server] Authorization response type: " + responseType)
@@ -148,7 +107,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	case <-successChan:
 	}
 
-	code, err := token.GenerateAuthCode(clientID, redirectURI, "")
+	code, err := token.GenerateAuthCode(clientID, redirectURI, codeChallenge)
 	if err != nil {
 		web.Respond(w, http.StatusBadRequest, "server_error")
 		return
@@ -163,12 +122,11 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3
-// This requires "aplication/x-www-form-urlencoded" format
 type TokenRequest struct {
 	GrantType   string `json:"request_type"`
 	Code        string `json:"code"`
 	RedirectURI string `json:"redirect_uri"`
+	CodeVerfier string `json:"CodeVerfier"`
 	ClientID    string `json:"client_id"`
 }
 
@@ -199,6 +157,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	code := r.PostForm.Get("code")
 	clientID := r.PostForm.Get("client_id")
+	codeVerifier := r.PostForm.Get("code_verifier")
 	// clientSecret := r.PostForm.Get("client_secret") // TODO: this should come in the form of auth header basic? https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	redirectURI := r.PostForm.Get("redirect_uri")
 	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s", code, clientID, redirectURI)
@@ -216,6 +175,25 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println("[Server] Token: not found for client: " + clientID + " err: " + err.Error())
 		web.Respond(w, http.StatusBadRequest, "invalid_client_id")
+		return
+	}
+
+	// Verify PKCE
+	var challenge string
+	switch authCode.CodeChallengeMethod {
+	case "S256":
+		h := sha256.Sum256([]byte(codeVerifier))
+		challenge = base64.RawURLEncoding.EncodeToString(h[:])
+	case "plain":
+		// NOTE: we don't accept this but code needs to be modified to check for it
+		challenge = codeVerifier
+	default:
+		http.Error(w, "Unsupported code_challenge_method", http.StatusBadRequest)
+		return
+	}
+
+	if challenge != authCode.CodeChallenge {
+		http.Error(w, "PKCE verification failed", http.StatusBadRequest)
 		return
 	}
 

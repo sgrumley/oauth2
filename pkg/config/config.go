@@ -39,6 +39,9 @@ func LoadEnvVarFile() (EnvVar, error) {
 		AuthCodeConfig: env["AUTHCODE_CONFIG"],
 		AuthCodePort:   env["AUTHCODE_PORT"],
 		AuthCodeHost:   env["AUTHCODE_HOST"],
+		PKCEConfig:     env["PKCE_CONFIG"],
+		PKCEPort:       env["PKCE_PORT"],
+		PKCEHost:       env["PKCE_HOST"],
 	}
 
 	return ev, nil
@@ -55,6 +58,9 @@ type EnvVar struct {
 	AuthCodeConfig string `envconfig:"AUTHCODE_CONFIG" default:"/app/config/config.yaml"`
 	AuthCodePort   string `envconfig:"AUTHCODE_PORT" default:":8081"`
 	AuthCodeHost   string `envconfig:"AUTHCODE_HOST" default:""`
+	PKCEConfig     string `envconfig:"PKCE_CONFIG" default:"/app/config/config.yaml"`
+	PKCEPort       string `envconfig:"PKCE_PORT" default:":8081"`
+	PKCEHost       string `envconfig:"PKCE_HOST" default:""`
 }
 
 func LoadYAMLDocument[T any](path string) (*T, error) {
