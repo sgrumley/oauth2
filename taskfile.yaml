@@ -17,10 +17,15 @@ tasks:
     cmds:
       - go run ./cmd/redirectmock/...
 
-  client-start:
+  authcode-client-start:
     desc: Start the client
     cmds:
       - go run ./cmd/flows/authcode/...
+
+  pkce-client-start:
+    desc: Start the client
+    cmds:
+      - go run ./cmd/flows/pkce/...
 
   clean:
     desc: Clean up running processes

@@ -22,10 +22,11 @@ var (
 )
 
 type AuthCodeConfig struct {
-	ClientID    string `yaml:"ClientID"`
-	RedirectURI string `yaml:"RedirectURI"`
-	AuthURL     string `yaml:"AuthURL"`
-	TokenURL    string `yaml:"TokenURL"`
+	ClientID     string `yaml:"ClientID"`
+	RedirectURI  string `yaml:"RedirectURI"`
+	AuthURL      string `yaml:"AuthURL"`
+	TokenURL     string `yaml:"TokenURL"`
+	ClientSecret string `yaml:"ClientSecret"`
 }
 
 func main() {
@@ -91,13 +92,13 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		Timeout: 3 * time.Minute,
 	}
 
-	// NOTE: should this be handled in the package??
 	state, err := auth.GenerateState()
 	if err != nil {
 		logger.Fatal(ctx, "failed to generate state", err)
 	}
 
 	client := authcode.NewClient(cfg.ClientID, cfg.RedirectURI, cfg.TokenURL, cfg.AuthURL, cli)
+	client.SetClientSecret(cfg.ClientSecret)
 
 	// Step 2: Make auth code request
 	if err := client.GetAuthorizationCode(ctx, scopes, state); err != nil {

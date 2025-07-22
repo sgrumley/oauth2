@@ -20,16 +20,18 @@ func GenerateRandomString() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
-func GenerateAuthCode(clientID, redirectURI string) (models.AuthCode, error) {
+func GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod string) (models.AuthCode, error) {
 	code, err := GenerateRandomString()
 	if err != nil {
 		return models.AuthCode{}, err
 	}
 	ac := models.AuthCode{
-		Code:        code,
-		ClientID:    clientID,
-		ExpiresAt:   time.Now().Add(10 * time.Minute),
-		RedirectURI: redirectURI,
+		Code:                code,
+		ClientID:            clientID,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
+		ExpiresAt:           time.Now().Add(10 * time.Minute),
+		RedirectURI:         redirectURI,
 	}
 
 	return ac, nil

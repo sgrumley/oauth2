@@ -6,6 +6,7 @@ import (
 	"net/http"
 )
 
+// TODO: move this to it's own service
 // callback is an endpoint to capture that the login was a success and signals the /auth endpoint to redirect the user
 func Callback(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("[Server] Callback Received")

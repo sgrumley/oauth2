@@ -1,5 +1,6 @@
 # Port: "8081"
-ClientID: "test_client"
+ClientID: "test_client" # currently hardcoded in store
 RedirectURI: "http://localhost:8081/callback"
 AuthURL: "http://localhost:8082/authorize"
 TokenURL: "http://localhost:8082/oauth/token"
+ClientSecret: "test_secret" # currently hardcoded in store
