@@ -22,10 +22,11 @@ var (
 )
 
 type PKCEConfig struct {
-	ClientID    string `yaml:"ClientID"`
-	RedirectURI string `yaml:"RedirectURI"`
-	AuthURL     string `yaml:"AuthURL"`
-	TokenURL    string `yaml:"TokenURL"`
+	ClientID     string `yaml:"ClientID"`
+	RedirectURI  string `yaml:"RedirectURI"`
+	AuthURL      string `yaml:"AuthURL"`
+	TokenURL     string `yaml:"TokenURL"`
+	ClientSecret string `yaml:"ClientSecret"`
 }
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 		logger.Fatal(ctx, "failed to load environment config", err)
 	}
 
-	cfg, err := config.LoadYAMLDocument[PKCEConfig](env.PKCEConfig)
+	cfg, err := config.LoadYAMLDocument[PKCEConfig](env.AuthCodeConfig)
 	if err != nil {
 		logger.Fatal(ctx, "failed to load yaml config: ", err)
 	}
@@ -50,7 +51,7 @@ func main() {
 	mux.HandleFunc("POST /callback", callback)
 
 	server := &http.Server{
-		Addr:    env.PKCEHost + env.PKCEPort,
+		Addr:    env.AuthCodeHost + env.AuthCodePort,
 		Handler: mux,
 	}
 
@@ -82,6 +83,7 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
 	// Step 1: Create a secret code verifier and code challenge
 	codeVerifier := auth.GenerateCodeVerifier()
 	codeChallenge := auth.GenerateCodeChallenge(codeVerifier)
+	client.SetPKCE(codeVerifier, codeChallenge, "S256")
 
 	// Step 2: Build the authorization URL and redirect the user to the auth server
 	// TODO: build out the auth code to accept PKCE
@@ -95,9 +97,9 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
 	select {
 	case <-ctx.Done():
 		logger.Fatal(ctx, "deadline exceeded for callback", fmt.Errorf("server timeout"))
-	case <-authCodeChan:
+	case <-pkceChan:
 	}
-	authCode := <-authCodeChan
+	authCode := <-pkceChan
 	returnedState := <-stateChan
 	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
 

@@ -57,7 +57,6 @@ func (s *Store) GetAuthCode(clientID string) (models.AuthCode, error) {
 }
 
 func (s *Store) SetAuthCode(code string, ac models.AuthCode) {
-	ac.CodeChallenge = "s256"
 	s.mu.Lock()
 	s.authCodes[code] = ac
 	s.mu.Unlock()

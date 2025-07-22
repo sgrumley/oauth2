@@ -22,10 +22,11 @@ var (
 )
 
 type AuthCodeConfig struct {
-	ClientID    string `yaml:"ClientID"`
-	RedirectURI string `yaml:"RedirectURI"`
-	AuthURL     string `yaml:"AuthURL"`
-	TokenURL    string `yaml:"TokenURL"`
+	ClientID     string `yaml:"ClientID"`
+	RedirectURI  string `yaml:"RedirectURI"`
+	AuthURL      string `yaml:"AuthURL"`
+	TokenURL     string `yaml:"TokenURL"`
+	ClientSecret string `yaml:"ClientSecret"`
 }
 
 func main() {
@@ -97,6 +98,7 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	}
 
 	client := authcode.NewClient(cfg.ClientID, cfg.RedirectURI, cfg.TokenURL, cfg.AuthURL, cli)
+	client.SetClientSecret(cfg.ClientSecret)
 
 	// Step 2: Make auth code request
 	if err := client.GetAuthorizationCode(ctx, scopes, state); err != nil {

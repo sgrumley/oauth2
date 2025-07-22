@@ -2,6 +2,8 @@ package authcode
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"time"
@@ -49,6 +51,11 @@ type AuthRequest struct {
 	Scope []string `json:"scope"`
 	// An opaque value, used for security purposes. If this request parameter is set in the request, then it is returned to the application as part of the redirect_uri.
 	State string `json:"state"`
+	// REQUIRED if using PKCE flow
+	CodeChallenge string `json:"code_challenge"`
+	// OPTIONAL, defaults to "plain" if not present in the request.  Code verifier transformation method is "S256" or "plain".
+	CodeChallengeMethod string `json:"code_challenge_method"`
+	// Holds a URL. A successful response from this endpoint results in a redirect to this URL.
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.2.2
@@ -111,10 +118,15 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	responseType := r.URL.Query().Get("response_type")
 	state := r.URL.Query().Get("state")
 
+	// used for PKCE only
+	codeChallenge := r.URL.Query().Get("code_challenge")
+	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
+
 	queryParams := r.URL.Query()
 	fmt.Println("All query parameters:", queryParams)
 	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s\n", responseType, clientID, redirectURI)
-	// NOTE: only supporting code
+
+	// NOTE: only supporting code for now
 	if responseType != "code" {
 		fmt.Println("[Server] Authorization response type: " + responseType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
@@ -148,7 +160,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	case <-successChan:
 	}
 
-	code, err := token.GenerateAuthCode(clientID, redirectURI, "")
+	code, err := token.GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		web.Respond(w, http.StatusBadRequest, "server_error")
 		return
@@ -166,10 +178,12 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3
 // This requires "aplication/x-www-form-urlencoded" format
 type TokenRequest struct {
-	GrantType   string `json:"request_type"`
-	Code        string `json:"code"`
-	RedirectURI string `json:"redirect_uri"`
-	ClientID    string `json:"client_id"`
+	GrantType    string `json:"request_type"`
+	Code         string `json:"code"`
+	RedirectURI  string `json:"redirect_uri"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	CodeVerfier  string `json:"code_verifier"`
 }
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.1.4
@@ -199,15 +213,14 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	code := r.PostForm.Get("code")
 	clientID := r.PostForm.Get("client_id")
-	// clientSecret := r.PostForm.Get("client_secret") // TODO: this should come in the form of auth header basic? https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	clientSecret := r.PostForm.Get("client_secret") // TODO: this should come in the form of auth header basic? https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	codeVerifier := r.PostForm.Get("code_verifier")
 	redirectURI := r.PostForm.Get("redirect_uri")
 	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s", code, clientID, redirectURI)
 
-	// TODO: unsure what clientsecret is
 	client, err := h.store.GetClient(clientID)
-	// if err != nil || client.Secret != clientSecret {
-	if err != nil || client.ID != clientID {
-		fmt.Println("[Server] Token: clientID: " + client.ID + " vs actual: " + clientID)
+	if err != nil {
+		fmt.Println("[Server] Token: clientID: " + client.ID + " not found")
 		web.Respond(w, http.StatusBadRequest, "invalid_client")
 		return
 	}
@@ -216,6 +229,38 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println("[Server] Token: not found for client: " + clientID + " err: " + err.Error())
 		web.Respond(w, http.StatusBadRequest, "invalid_client_id")
+		return
+	}
+
+	if clientSecret != "" {
+		if client.Secret != clientSecret {
+			fmt.Println("[Server] Token: invalid client secret: " + client.ID + " vs actual: " + clientID)
+			web.Respond(w, http.StatusBadRequest, "invalid_client")
+			return
+		}
+	} else if codeVerifier != "" {
+		// Verify PKCE
+		var challenge string
+		switch authCode.CodeChallengeMethod {
+		case "S256", "s256":
+			h := sha256.Sum256([]byte(codeVerifier))
+			challenge = base64.RawURLEncoding.EncodeToString(h[:])
+		case "plain":
+			challenge = codeVerifier
+		default:
+			// NOTE: RFC mentions that a blank method will default to plain. Choosing to error if not intentional
+			fmt.Println("[Server] Token: invalid code_challenge_method" + authCode.CodeChallengeMethod)
+			http.Error(w, "invalid_code_challenge_method", http.StatusBadRequest)
+			return
+		}
+
+		if challenge != authCode.CodeChallenge {
+			http.Error(w, "PKCE verification failed", http.StatusBadRequest)
+			return
+		}
+	} else {
+		fmt.Println("[Server] Token: flow not supported")
+		web.Respond(w, http.StatusBadRequest, "unauthorized_client")
 		return
 	}
 
@@ -242,9 +287,8 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		web.Respond(w, http.StatusInternalServerError, "server_error")
 		return
 	}
-	h.store.SetToken(token)
 
-	// Remove used auth code
+	h.store.SetToken(token)
 	h.store.DeleteAuthCode(code)
 
 	response := TokenResponse{
