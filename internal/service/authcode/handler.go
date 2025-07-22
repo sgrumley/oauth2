@@ -36,7 +36,6 @@ func NewHandler(s AuthStore, loginURL string) *Handler {
 	}
 }
 
-// TODO: add client secret
 // https://www.rfc-editor.org/rfc/rfc6749#section-4.2.1
 type AuthRequest struct {
 	// Tells the authorization server which grant to execute.
