@@ -13,7 +13,6 @@ import (
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/logger"
 	"github.com/sgrumley/oauth/pkg/web"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -89,15 +88,8 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	// 	panic(err)
 	// }
 
-	conf := &oauth2.Config{
-		ClientID:     cfg.ClientID,
-		ClientSecret: cfg.ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  cfg.AuthURL,
-			TokenURL: cfg.TokenURL,
-		},
-		RedirectURL: cfg.RedirectURI,
-		Scopes:      []string{"read post"},
+	cli := &http.Client{
+		Timeout: 3 * time.Minute,
 	}
 
 	state, err := auth.GenerateState()
@@ -105,8 +97,11 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		logger.Fatal(ctx, "failed to generate state", err)
 	}
 
-	codeURL := conf.AuthCodeURL(state)
-	if err := authcode.GetAuthorizationCode(ctx, codeURL); err != nil {
+	client := authcode.NewClient(cfg.ClientID, cfg.RedirectURI, cfg.TokenURL, cfg.AuthURL, cli)
+	client.SetClientSecret(cfg.ClientSecret)
+
+	// Step 2: Make auth code request
+	if err := client.GetAuthorizationCode(ctx, scopes, state); err != nil {
 		logger.Error(ctx, "get auth code request failed", err)
 		return
 	}
@@ -124,40 +119,17 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
 	logger.Info(ctx, "[Client] Calling /token")
-	if state != returnedState {
-		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
-	}
-	token, err := conf.Exchange(ctx, authCode)
+	token, err := client.ExchangeCodeForToken(ctx, authCode, returnedState, state)
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
-
-	// TODO: how does refresh token work
 	logger.Info(ctx, "[Client] flow completed with Token",
 		slog.String("access_token", token.AccessToken),
 		slog.String("refresh_token", token.RefreshToken),
-		slog.Int64("expire_time", token.ExpiresIn),
+		slog.Int("expire_time", token.ExpiresIn),
 		slog.String("token_type", token.TokenType),
+		slog.String("scope", token.Scope),
 	)
-
-	// log the claims after unmarshalling jwt??
-	/*
-		accessToken := tok.AccessToken
-
-		    // Parse the JWT
-		    token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
-		        // Provide the public key or secret used to sign the JWT
-		        // For example, for HS256:
-		        return []byte("provider-secret"), nil
-		    })
-		    if err != nil {
-		        fmt.Println("JWT parsing error:", err)
-		        return
-		    }
-		    if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		        fmt.Println("OAuth2 JWT claims:", claims)
-		    }
-	*/
 
 	logger.Info(ctx, "Shutting down client")
 	os.Exit(1)
@@ -165,11 +137,8 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 
 // TODO: move to pkg if it can be reused by other flows
 // TODO: add middleware to inject logger in request ctx
-// TODO: have some sort of channel register that uses a value in the url to match requests and send back to other endpoint
-//
-//	can use state or and another field??
 func callback(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Client] Callback Received: " + r.RequestURI)
+	fmt.Println("[Client] Callback Received")
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
