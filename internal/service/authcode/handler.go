@@ -199,7 +199,7 @@ type TokenResponse struct {
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.2
 func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Server] Token request received NewRequest")
+	fmt.Println("[Server] Token request received")
 
 	err := r.ParseForm()
 	if err != nil {
@@ -208,17 +208,11 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grantType := r.PostForm.Get("grant_type")
-	if grantType != "authorization_code" { // TODO: this can be expanded upon
+	if grantType != "authorization_code" {
 		fmt.Println("[Server] Authorization grant_type: authorization_code" + " vs actual: " + grantType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
-
-	code := r.PostForm.Get("code")
-
-	fmt.Println("1.------- ", r.URL.RawPath)
-	fmt.Println("2.------- ", r.Header)
-	fmt.Println("3.------- ", r.Form)
 
 	clientID, clientSecret, err := getClientID(r)
 	if err != nil {
@@ -227,6 +221,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	code := r.PostForm.Get("code")
 	codeVerifier := r.PostForm.Get("code_verifier")
 	redirectURI := r.PostForm.Get("redirect_uri")
 	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s\n", code, clientID, redirectURI)
@@ -321,26 +316,22 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 func getClientID(r *http.Request) (string, string, error) {
 	clientID := r.PostForm.Get("client_id")
-	clientSecret := r.PostForm.Get("client_secret") // TODO: this should come in the form of auth header basic? https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
+	clientSecret := r.PostForm.Get("client_secret")
 
 	// try the request header
 	if clientID == "" {
 		auth := r.Header.Get("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Basic ") {
-			// http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
 			return "", "", fmt.Errorf("missing or invalid Authorization header")
 		}
 
-		// Decode base64 part
 		payload, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(auth, "Basic "))
 		if err != nil {
-			// http.Error(w, "Invalid base64", http.StatusUnauthorized)
 			return "", "", fmt.Errorf("invalid base64")
 		}
 
 		parts := strings.SplitN(string(payload), ":", 2)
 		if len(parts) != 2 {
-			// http.Error(w, "Invalid credentials format", http.StatusUnauthorized)
 			return "", "", fmt.Errorf("invalid credentials format")
 		}
 

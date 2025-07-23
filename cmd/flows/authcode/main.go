@@ -121,23 +121,22 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	}
 	authCode := <-authCodeChan
 	returnedState := <-stateChan
-	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
+	logger.Info(ctx, "[Client] Auth Code", slog.String("code", authCode))
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
 	if state != returnedState {
 		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
 	}
 
-	logger.Info(ctx, "[Client] Calling /token ---------")
+	logger.Info(ctx, "[Client] Calling /token")
 	token, err := conf.Exchange(ctx, authCode)
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
 
-	// TODO: how does refresh token work
 	logger.Info(ctx, "[Client] flow completed with Token",
 		slog.String("access_token", token.AccessToken),
-		slog.String("refresh_token", token.RefreshToken),
+		slog.String("refresh_token", token.RefreshToken), // this will come in a later commit
 		slog.Int64("expire_time", token.ExpiresIn),
 		slog.String("token_type", token.TokenType),
 	)
