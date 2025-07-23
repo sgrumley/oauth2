@@ -1,8 +1,0 @@
-sequenceDiagram
-    Client->>Service: /auth
-    Service->>LoginPage: user/pass
-    LoginPage->>Service: /login 
-    LoginPage->>Service: /callback
-    Service->>Client: load redirect_uri (/callback) 
-    Client->>Service: /token
-    Service->>Client: JWT
