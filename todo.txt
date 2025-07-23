@@ -1,12 +1,14 @@
-- Turn TLS on and get working
 - Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
   - Clean up the code and make references back to spec
-- Add Client Registration
-- Turn Access Token into a JWT + add JWKs -> use golang-jwt
-- Some minor fixes needed for authcode
+- refactor PKCE
+- callback channel pkg
+
 - implement refresh token for token endpoint with grant_type=refresh_token
 - implement scopes
+- implement jwks (do this as part of OIDC and update other flows)
+- implement DCR (do this as part of OIDC and update other flows)
 
 -> Once above complete move on to next flow
+- Add TLS
 - Add MTLS
 - OIDC
