@@ -9,6 +9,7 @@ import (
 	"github.com/sgrumley/oauth/internal/store"
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/middleware"
+	"github.com/sgrumley/oauth/pkg/sync"
 	"github.com/sgrumley/oauth/pkg/web"
 )
 
@@ -29,14 +30,15 @@ func main() {
 	}
 
 	store := store.New()
-	authHandler := authcode.NewHandler(store, cfg.LoginURL)
+	s := sync.New()
+	authHandler := authcode.NewHandler(store, cfg.LoginURL, s)
 
 	// Routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /authorize", authHandler.Authorization)
 	mux.HandleFunc("POST /oauth/token", authHandler.Token)
 
-	mux.HandleFunc("GET /callback", authcode.Callback)
+	mux.HandleFunc("GET /callback", sync.Callback(s))
 	mux.HandleFunc("POST /api/login", authcode.HandleLogin)
 
 	wrappedMux := middleware.CorsMiddleware(mux)

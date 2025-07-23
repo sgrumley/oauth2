@@ -102,17 +102,7 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 	}
 
 	logger.Info(ctx, "[Client] Waiting for authorization code")
-	// // TODO: look for a better way to do this? A way to get the correct authcode if called multiple times? use clientID+state?challenge??
-	// select {
-	// case <-ctx.Done():
-	// 	logger.Fatal(ctx, "deadline exceeded for callback", fmt.Errorf("server timeout"))
-	// case <-pkceChan:
-	// }
-	// authCode := <-pkceChan
-	// returnedState := <-stateChan
-
 	callbackHandler := <-ch
-
 	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", callbackHandler.AuthCode))
 
 	if state != callbackHandler.State {
@@ -134,30 +124,4 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 	)
 
 	logger.Info(ctx, "Shutting down client")
-	// os.Exit(1)
 }
-
-// func callback(w http.ResponseWriter, r *http.Request) {
-// 	fmt.Println("[Client] Callback Received")
-// 	code := r.URL.Query().Get("code")
-// 	state := r.URL.Query().Get("state")
-//
-// 	// Check for errors in the callback
-// 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-// 		errDesc := r.URL.Query().Get("error_description")
-// 		fmt.Fprintf(w, errMsg, errDesc)
-// 		return
-// 	}
-//
-// 	fmt.Fprintf(w,
-// 		r.URL.String(),
-// 		code,
-// 		state,
-// 	)
-//
-// 	fmt.Println("[Client] Callback - channel sent")
-// 	go func() {
-// 		pkceChan <- code
-// 		stateChan <- state
-// 	}()
-// }

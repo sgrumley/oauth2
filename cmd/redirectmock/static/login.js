@@ -109,7 +109,17 @@ document.addEventListener("DOMContentLoaded", function () {
   async function callback() {
     console.log("Attempting callback...");
     try {
-      const response = await fetch("http://localhost:8082/callback", {
+      // Get state from current URL
+      const params = new URLSearchParams(window.location.search);
+      const state = params.get("state");
+
+      // Build the callback URL, adding state if it exists
+      let url = "http://localhost:8082/callback";
+      if (state) {
+        url += `?state=${encodeURIComponent(state)}`;
+      }
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

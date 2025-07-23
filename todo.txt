@@ -1,7 +1,5 @@
 - Review RFC https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
   - Clean up the code and make references back to spec
-- refactor PKCE
-- callback channel pkg
 
 - implement refresh token for token endpoint with grant_type=refresh_token
 - implement scopes
@@ -12,3 +10,9 @@
 - Add TLS
 - Add MTLS
 - OIDC
+
+currently half way between terminal and web
+- accept user/pass in the terminal
+- keep current browser for sign
+- add a use case to go full web
+- remove second open browser from /auth (redirect or post)

@@ -13,13 +13,13 @@ import (
 	"github.com/sgrumley/oauth/internal/models"
 	"github.com/sgrumley/oauth/internal/token"
 	"github.com/sgrumley/oauth/pkg/browser"
+	"github.com/sgrumley/oauth/pkg/sync"
 	"github.com/sgrumley/oauth/pkg/web"
 )
 
-var successChan = make(chan bool)
-
 type Handler struct {
 	loginURL string
+	syncer   *sync.Sync
 	store    AuthStore
 }
 
@@ -31,9 +31,10 @@ type AuthStore interface {
 	SetToken(tok models.Token)
 }
 
-func NewHandler(s AuthStore, loginURL string) *Handler {
+func NewHandler(s AuthStore, loginURL string, syncer *sync.Sync) *Handler {
 	return &Handler{
 		store:    s,
+		syncer:   syncer,
 		loginURL: loginURL,
 	}
 }
@@ -119,6 +120,14 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	responseType := r.URL.Query().Get("response_type")
 	state := r.URL.Query().Get("state")
 
+	// TODO: at the moment not having state would break everything
+	// - create a custom variable to pass through
+	var id string
+	if state != "" {
+		id = state
+	}
+	ch := h.syncer.Register(id)
+
 	// used for PKCE only
 	codeChallenge := r.URL.Query().Get("code_challenge")
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
@@ -147,9 +156,10 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("[Server] Authorization redirected to " + h.loginURL)
+	loginStateURL := h.loginURL + "?state=" + state
+	fmt.Println("[Server] Authorization redirected to " + loginStateURL)
 	// NOTE: terminal based flow cannot redirect
-	if err := browser.OpenBrowser(h.loginURL); err != nil {
+	if err := browser.OpenBrowser(loginStateURL); err != nil {
 		fmt.Println("failed to open browser")
 	}
 
@@ -158,7 +168,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		web.Respond(w, http.StatusInternalServerError, "server timeout")
 		return
-	case <-successChan:
+	case <-ch:
 	}
 
 	code, err := token.GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod)
