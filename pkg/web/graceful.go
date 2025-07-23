@@ -37,8 +37,13 @@ func HandleShutdown(ctx context.Context, cfg *exitConfig) <-chan error {
 	signal.Notify(exit, cfg.trappedSignals...)
 
 	go func() {
-		sig := <-exit
-		logger.Info(ctx, "shutting down server", slog.String("signal", sig.String()))
+		select {
+		case sig := <-exit:
+			logger.Info(ctx, "shutting down server", slog.String("signal", sig.String()))
+
+		case <-ctx.Done():
+			logger.Info(ctx, "shutting down server", slog.String("reason", ctx.Err().Error()))
+		}
 
 		ctxTTL, cancel := context.WithTimeout(cfg.ctx, cfg.timeout)
 		defer cancel()
@@ -58,8 +63,6 @@ func HandleShutdown(ctx context.Context, cfg *exitConfig) <-chan error {
 			}
 		case <-ctxTTL.Done():
 			done <- fmt.Errorf("graceful shutdown interrupted or deadline exceeded: %w", context.Cause(ctxTTL))
-		case <-ctx.Done():
-			done <- fmt.Errorf("graceful shutdown interrupted or deadline exceeded: %w", context.Cause(ctx))
 		}
 	}()
 

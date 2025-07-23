@@ -5,21 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/sgrumley/oauth/pkg/auth"
 	"github.com/sgrumley/oauth/pkg/authcode"
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/logger"
+	"github.com/sgrumley/oauth/pkg/sync"
 	"github.com/sgrumley/oauth/pkg/web"
 	"golang.org/x/oauth2"
-)
-
-var (
-	authCodeChan = make(chan string)
-	stateChan    = make(chan string)
-	// scopes       = "posts read"
 )
 
 type AuthCodeConfig struct {
@@ -31,7 +25,8 @@ type AuthCodeConfig struct {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	log := logger.NewLogger()
 	ctx = logger.AddLoggerContext(ctx, log.Logger)
 
@@ -48,15 +43,21 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Routes
-	mux.HandleFunc("GET /callback", callback)
-	mux.HandleFunc("POST /callback", callback)
+	s := sync.New()
+	mux.HandleFunc("GET /callback", sync.Callback(s))
+	mux.HandleFunc("POST /callback", sync.Callback(s))
 
 	server := &http.Server{
 		Addr:    env.AuthCodeHost + env.AuthCodePort,
 		Handler: mux,
 	}
 
-	go AuthorizationCodeFlow(ctx, cfg)
+	go func() {
+		AuthorizationCodeFlow(ctx, cfg, s)
+		// This sleep just prevents the server shutting down before the callback endpoint has been hit. Updating the auth endpoint to use a http.Client instead will also resolve the issue
+		time.Sleep(1 * time.Second)
+		cancel()
+	}()
 
 	logger.Info(ctx, "[Client] listening on localhost"+env.AuthCodePort)
 	if err := web.ListenAndServe(ctx, server); err != nil {
@@ -74,16 +75,11 @@ func main() {
 	&state=OqEo1LX_r-atq7-L
 */
 
-func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
+func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig, s *sync.Sync) {
 	logger.Info(ctx, "[Client] Started auth flow")
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	// defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 
-	// TODO: how can I get the main process to shutdown if this returns
-	defer func() {
-		<-ctx.Done()
-		defer cancel()
-	}()
 	// tls, err := NewSSLClient("server.crt")
 	// if err != nil {
 	// 	panic(err)
@@ -106,6 +102,8 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		logger.Fatal(ctx, "failed to generate state", err)
 	}
 
+	ch := s.Register(state)
+
 	codeURL := conf.AuthCodeURL(state)
 	if err := authcode.GetAuthorizationCode(ctx, codeURL); err != nil {
 		logger.Error(ctx, "get auth code request failed", err)
@@ -113,23 +111,16 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	}
 
 	logger.Info(ctx, "[Client] Waiting for authorization code")
-	// TODO: look for a better way to do this? A way to get the correct authcode if called multiple times?
-	select {
-	case <-ctx.Done():
-		logger.Fatal(ctx, "deadline exceeded for callback", fmt.Errorf("server timeout"))
-	case <-authCodeChan:
-	}
-	authCode := <-authCodeChan
-	returnedState := <-stateChan
-	logger.Info(ctx, "[Client] Auth Code", slog.String("code", authCode))
+	callbackHandler := <-ch
+	logger.Info(ctx, "[Client] Auth Code", slog.String("code", callbackHandler.AuthCode))
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
-	if state != returnedState {
-		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
+	if state != callbackHandler.State {
+		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, callbackHandler.State))
 	}
 
 	logger.Info(ctx, "[Client] Calling /token")
-	token, err := conf.Exchange(ctx, authCode)
+	token, err := conf.Exchange(ctx, callbackHandler.AuthCode)
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
@@ -161,37 +152,4 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	*/
 
 	logger.Info(ctx, "Shutting down client")
-	os.Exit(1)
-}
-
-// TODO: move to pkg if it can be reused by other flows
-// TODO: add middleware to inject logger in request ctx
-// TODO: have some sort of channel register that uses a value in the url to match requests and send back to other endpoint
-//
-//	can use state or and another field??
-func callback(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Client] Callback Received: " + r.RequestURI)
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-
-	// Check for errors in the callback
-	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		_, _ = fmt.Fprintf(w, errMsg, errDesc)
-		return
-	}
-
-	if _, err := fmt.Fprintf(w,
-		r.URL.String(),
-		code,
-		state,
-	); err != nil {
-		return
-	}
-
-	fmt.Println("[Client] Callback - channel sent")
-	go func() {
-		authCodeChan <- code
-		stateChan <- state
-	}()
 }
