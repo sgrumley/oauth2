@@ -37,7 +37,6 @@ func GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod 
 	return ac, nil
 }
 
-// TODO: this should return a JWT
 func Generate() (models.Token, error) {
 	accessToken, err := GenerateRandomString()
 	if err != nil {

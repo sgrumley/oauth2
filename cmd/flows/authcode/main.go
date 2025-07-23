@@ -13,12 +13,13 @@ import (
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/logger"
 	"github.com/sgrumley/oauth/pkg/web"
+	"golang.org/x/oauth2"
 )
 
 var (
 	authCodeChan = make(chan string)
 	stateChan    = make(chan string)
-	scopes       = "posts read"
+	// scopes       = "posts read"
 )
 
 type AuthCodeConfig struct {
@@ -88,8 +89,16 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	// 	panic(err)
 	// }
 
-	cli := &http.Client{
-		Timeout: 3 * time.Minute,
+	conf := &oauth2.Config{
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:   cfg.AuthURL,
+			TokenURL:  cfg.TokenURL,
+			AuthStyle: 1,
+		},
+		RedirectURL: cfg.RedirectURI,
+		Scopes:      []string{"read post"},
 	}
 
 	state, err := auth.GenerateState()
@@ -97,11 +106,8 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		logger.Fatal(ctx, "failed to generate state", err)
 	}
 
-	client := authcode.NewClient(cfg.ClientID, cfg.RedirectURI, cfg.TokenURL, cfg.AuthURL, cli)
-	client.SetClientSecret(cfg.ClientSecret)
-
-	// Step 2: Make auth code request
-	if err := client.GetAuthorizationCode(ctx, scopes, state); err != nil {
+	codeURL := conf.AuthCodeURL(state)
+	if err := authcode.GetAuthorizationCode(ctx, codeURL); err != nil {
 		logger.Error(ctx, "get auth code request failed", err)
 		return
 	}
@@ -115,21 +121,44 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	}
 	authCode := <-authCodeChan
 	returnedState := <-stateChan
-	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
+	logger.Info(ctx, "[Client] Auth Code", slog.String("code", authCode))
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
+	if state != returnedState {
+		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
+	}
+
 	logger.Info(ctx, "[Client] Calling /token")
-	token, err := client.ExchangeCodeForToken(ctx, authCode, returnedState, state)
+	token, err := conf.Exchange(ctx, authCode)
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
+
 	logger.Info(ctx, "[Client] flow completed with Token",
 		slog.String("access_token", token.AccessToken),
-		slog.String("refresh_token", token.RefreshToken),
-		slog.Int("expire_time", token.ExpiresIn),
+		slog.String("refresh_token", token.RefreshToken), // this will come in a later commit
+		slog.Int64("expire_time", token.ExpiresIn),
 		slog.String("token_type", token.TokenType),
-		slog.String("scope", token.Scope),
 	)
+
+	// log the claims after unmarshalling jwt??
+	/*
+		accessToken := tok.AccessToken
+
+		    // Parse the JWT
+		    token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
+		        // Provide the public key or secret used to sign the JWT
+		        // For example, for HS256:
+		        return []byte("provider-secret"), nil
+		    })
+		    if err != nil {
+		        fmt.Println("JWT parsing error:", err)
+		        return
+		    }
+		    if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		        fmt.Println("OAuth2 JWT claims:", claims)
+		    }
+	*/
 
 	logger.Info(ctx, "Shutting down client")
 	os.Exit(1)
@@ -137,23 +166,28 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 
 // TODO: move to pkg if it can be reused by other flows
 // TODO: add middleware to inject logger in request ctx
+// TODO: have some sort of channel register that uses a value in the url to match requests and send back to other endpoint
+//
+//	can use state or and another field??
 func callback(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Client] Callback Received")
+	fmt.Println("[Client] Callback Received: " + r.RequestURI)
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
 	// Check for errors in the callback
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		errDesc := r.URL.Query().Get("error_description")
-		fmt.Fprintf(w, errMsg, errDesc)
+		_, _ = fmt.Fprintf(w, errMsg, errDesc)
 		return
 	}
 
-	fmt.Fprintf(w,
+	if _, err := fmt.Fprintf(w,
 		r.URL.String(),
 		code,
 		state,
-	)
+	); err != nil {
+		return
+	}
 
 	fmt.Println("[Client] Callback - channel sent")
 	go func() {

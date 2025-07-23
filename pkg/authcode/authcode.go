@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/sgrumley/oauth/pkg/logger"
 )
@@ -172,4 +173,39 @@ func (c *Client) ExchangeCodeForToken(ctx context.Context, code, state, expected
 	}
 
 	return &tokenResp, nil
+}
+
+func GetAuthorizationCode(ctx context.Context, url string) error {
+	logger.Info(ctx, "[Client] Calling "+url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create auth code request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	cli := &http.Client{
+		Timeout: 3 * time.Minute,
+	}
+	resp, err := cli.Do(req)
+	if err != nil {
+		return fmt.Errorf("auth code request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("auth code request failed: %v", string(body))
+	}
+
+	logger.Info(ctx, "[Client] auth code response",
+		slog.Int("status code", resp.StatusCode),
+		slog.String("body", string(body)),
+	)
+	return nil
 }

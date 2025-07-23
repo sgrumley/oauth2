@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/sgrumley/oauth/internal/jwt"
 	"github.com/sgrumley/oauth/internal/models"
 	"github.com/sgrumley/oauth/internal/token"
 	"github.com/sgrumley/oauth/pkg/browser"
@@ -168,7 +170,9 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 
 	completeRedirectURI := redirectURI + "?code=" + code.Code + "&redirect_uri=" + redirectURI + "&state=" + state
 	fmt.Println("[Server] Authorization redirected to " + completeRedirectURI)
+
 	// NOTE: terminal based flow cannot redirect. Using a GET request allows the callback endpoint to be triggered by a redirect
+	// this is why the second web page opens. This should be a request for terminal flow
 	if err := browser.OpenBrowser(completeRedirectURI); err != nil {
 		fmt.Println("failed to open browser")
 	}
@@ -189,7 +193,7 @@ type TokenRequest struct {
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"` // optional
-	ExpiresIn    int    `json:"expires_in"`
+	ExpiresIn    int64  `json:"expires_in"`
 	TokenType    string `json:"token_type"`
 }
 
@@ -204,18 +208,23 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grantType := r.PostForm.Get("grant_type")
-	if grantType != "authorization_code" { // TODO: this can be expanded upon
+	if grantType != "authorization_code" {
 		fmt.Println("[Server] Authorization grant_type: authorization_code" + " vs actual: " + grantType)
 		web.Respond(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
 
+	clientID, clientSecret, err := getClientID(r)
+	if err != nil {
+		fmt.Println("[Server] Token: clientID missing from request")
+		web.Respond(w, http.StatusBadRequest, "invalid_client")
+		return
+	}
+
 	code := r.PostForm.Get("code")
-	clientID := r.PostForm.Get("client_id")
-	clientSecret := r.PostForm.Get("client_secret") // TODO: this should come in the form of auth header basic? https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
 	codeVerifier := r.PostForm.Get("code_verifier")
 	redirectURI := r.PostForm.Get("redirect_uri")
-	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s", code, clientID, redirectURI)
+	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s\n", code, clientID, redirectURI)
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
@@ -281,21 +290,54 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate tokens
-	token, err := token.Generate()
+	token, expTime, err := jwt.Generate(clientID)
 	if err != nil {
-		web.Respond(w, http.StatusInternalServerError, "server_error")
+		web.Respond(w, http.StatusInternalServerError, "failed_generating_jwt")
 		return
 	}
 
-	h.store.SetToken(token)
+	// for testing purposes
+	if _, err := jwt.ParseJWT(token); err != nil {
+		web.Respond(w, http.StatusInternalServerError, "internal_invalid_token")
+		return
+	}
+
 	h.store.DeleteAuthCode(code)
 
-	response := TokenResponse{
-		AccessToken:  token.AccessToken,
-		RefreshToken: token.RefreshToken,
-		ExpiresIn:    token.ExpiresIn,
-		TokenType:    token.TokenType,
+	res := TokenResponse{
+		AccessToken: token,
+		ExpiresIn:   expTime,
+		TokenType:   "Bearer",
 	}
-	fmt.Printf("[Server] Token returned: %v\n", response)
-	web.RespondContent(w, http.StatusOK, response)
+
+	fmt.Printf("[Server] Token returned: %v\n", token)
+	web.RespondContent(w, http.StatusOK, res)
+}
+
+func getClientID(r *http.Request) (string, string, error) {
+	clientID := r.PostForm.Get("client_id")
+	clientSecret := r.PostForm.Get("client_secret")
+
+	// try the request header
+	if clientID == "" {
+		auth := r.Header.Get("Authorization")
+		if auth == "" || !strings.HasPrefix(auth, "Basic ") {
+			return "", "", fmt.Errorf("missing or invalid Authorization header")
+		}
+
+		payload, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(auth, "Basic "))
+		if err != nil {
+			return "", "", fmt.Errorf("invalid base64")
+		}
+
+		parts := strings.SplitN(string(payload), ":", 2)
+		if len(parts) != 2 {
+			return "", "", fmt.Errorf("invalid credentials format")
+		}
+
+		clientID = parts[0]
+		clientSecret = parts[1]
+	}
+
+	return clientID, clientSecret, nil
 }
