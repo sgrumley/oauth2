@@ -5,21 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/sgrumley/oauth/pkg/auth"
 	"github.com/sgrumley/oauth/pkg/authcode"
 	"github.com/sgrumley/oauth/pkg/config"
 	"github.com/sgrumley/oauth/pkg/logger"
+	"github.com/sgrumley/oauth/pkg/sync"
 	"github.com/sgrumley/oauth/pkg/web"
 	"golang.org/x/oauth2"
-)
-
-var (
-	pkceChan  = make(chan string)
-	stateChan = make(chan string)
-	// scopes    = "posts read"
 )
 
 type PKCEConfig struct {
@@ -31,7 +25,8 @@ type PKCEConfig struct {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	log := logger.NewLogger()
 	ctx = logger.AddLoggerContext(ctx, log.Logger)
 
@@ -46,17 +41,21 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-
+	s := sync.New()
 	// Routes
-	mux.HandleFunc("GET /callback", callback)
-	mux.HandleFunc("POST /callback", callback)
+	mux.HandleFunc("GET /callback", sync.Callback(s))
+	mux.HandleFunc("POST /callback", sync.Callback(s))
 
 	server := &http.Server{
 		Addr:    env.AuthCodeHost + env.AuthCodePort,
 		Handler: mux,
 	}
 
-	go PKCEFlow(ctx, cfg)
+	go func() {
+		PKCEFlow(ctx, cfg, s)
+		time.Sleep(1 * time.Second)
+		cancel()
+	}()
 
 	logger.Info(ctx, "[Client] listening on localhost"+env.AuthCodePort)
 	if err := web.ListenAndServe(ctx, server); err != nil {
@@ -65,7 +64,7 @@ func main() {
 	}
 }
 
-func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
+func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 	logger.Info(ctx, "[Client] Started auth flow")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -74,6 +73,8 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
 	if err != nil {
 		logger.Fatal(ctx, "failed to generate state", err)
 	}
+
+	ch := s.Register(state)
 
 	conf := &oauth2.Config{
 		ClientID: cfg.ClientID,
@@ -101,23 +102,26 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
 	}
 
 	logger.Info(ctx, "[Client] Waiting for authorization code")
-	// TODO: look for a better way to do this? A way to get the correct authcode if called multiple times? use clientID+state?challenge??
-	select {
-	case <-ctx.Done():
-		logger.Fatal(ctx, "deadline exceeded for callback", fmt.Errorf("server timeout"))
-	case <-pkceChan:
-	}
-	authCode := <-pkceChan
-	returnedState := <-stateChan
-	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
+	// // TODO: look for a better way to do this? A way to get the correct authcode if called multiple times? use clientID+state?challenge??
+	// select {
+	// case <-ctx.Done():
+	// 	logger.Fatal(ctx, "deadline exceeded for callback", fmt.Errorf("server timeout"))
+	// case <-pkceChan:
+	// }
+	// authCode := <-pkceChan
+	// returnedState := <-stateChan
 
-	if state != returnedState {
-		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
+	callbackHandler := <-ch
+
+	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", callbackHandler.AuthCode))
+
+	if state != callbackHandler.State {
+		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, callbackHandler.State))
 	}
 
 	// Step 4: Exchange the auth code and code verifier for an access token
 	logger.Info(ctx, "[Client] Calling /token")
-	token, err := conf.Exchange(ctx, authCode, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
+	token, err := conf.Exchange(ctx, callbackHandler.AuthCode, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
@@ -130,30 +134,30 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig) {
 	)
 
 	logger.Info(ctx, "Shutting down client")
-	os.Exit(1)
+	// os.Exit(1)
 }
 
-func callback(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Client] Callback Received")
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-
-	// Check for errors in the callback
-	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		fmt.Fprintf(w, errMsg, errDesc)
-		return
-	}
-
-	fmt.Fprintf(w,
-		r.URL.String(),
-		code,
-		state,
-	)
-
-	fmt.Println("[Client] Callback - channel sent")
-	go func() {
-		pkceChan <- code
-		stateChan <- state
-	}()
-}
+// func callback(w http.ResponseWriter, r *http.Request) {
+// 	fmt.Println("[Client] Callback Received")
+// 	code := r.URL.Query().Get("code")
+// 	state := r.URL.Query().Get("state")
+//
+// 	// Check for errors in the callback
+// 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
+// 		errDesc := r.URL.Query().Get("error_description")
+// 		fmt.Fprintf(w, errMsg, errDesc)
+// 		return
+// 	}
+//
+// 	fmt.Fprintf(w,
+// 		r.URL.String(),
+// 		code,
+// 		state,
+// 	)
+//
+// 	fmt.Println("[Client] Callback - channel sent")
+// 	go func() {
+// 		pkceChan <- code
+// 		stateChan <- state
+// 	}()
+// }
