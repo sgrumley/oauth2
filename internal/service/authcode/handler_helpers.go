@@ -20,7 +20,7 @@ func Callback(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	fmt.Fprintf(w,
+	_, _ = fmt.Fprint(w,
 		r.URL.String(),
 	)
 

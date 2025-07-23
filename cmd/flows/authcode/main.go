@@ -19,7 +19,7 @@ import (
 var (
 	authCodeChan = make(chan string)
 	stateChan    = make(chan string)
-	scopes       = "posts read"
+	// scopes       = "posts read"
 )
 
 type AuthCodeConfig struct {
@@ -93,8 +93,9 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  cfg.AuthURL,
-			TokenURL: cfg.TokenURL,
+			AuthURL:   cfg.AuthURL,
+			TokenURL:  cfg.TokenURL,
+			AuthStyle: 1,
 		},
 		RedirectURL: cfg.RedirectURI,
 		Scopes:      []string{"read post"},
@@ -123,10 +124,11 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig) {
 	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", authCode))
 
 	// Step 3: After the user is redirected back to the client, verify the state matches and get token
-	logger.Info(ctx, "[Client] Calling /token")
 	if state != returnedState {
 		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, returnedState))
 	}
+
+	logger.Info(ctx, "[Client] Calling /token ---------")
 	token, err := conf.Exchange(ctx, authCode)
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
@@ -176,15 +178,17 @@ func callback(w http.ResponseWriter, r *http.Request) {
 	// Check for errors in the callback
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		errDesc := r.URL.Query().Get("error_description")
-		fmt.Fprintf(w, errMsg, errDesc)
+		_, _ = fmt.Fprintf(w, errMsg, errDesc)
 		return
 	}
 
-	fmt.Fprintf(w,
+	if _, err := fmt.Fprintf(w,
 		r.URL.String(),
 		code,
 		state,
-	)
+	); err != nil {
+		return
+	}
 
 	fmt.Println("[Client] Callback - channel sent")
 	go func() {

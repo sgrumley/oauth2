@@ -4,6 +4,7 @@
 - Add Client Registration
 - Turn Access Token into a JWT + add JWKs -> use golang-jwt
 - Some minor fixes needed for authcode
+- implement refresh token for token endpoint with grant_type=refresh_token
 
 -> Once above complete move on to next flow
 - Add MTLS

@@ -9,50 +9,40 @@ import (
 
 var secret string = "secret"
 
-func Generate() (string, error) {
-	// accessToken, err := GenerateRandomString()
-	// if err != nil {
-	// 	return "", err
-	// }
-	// refreshToken, err := GenerateRandomString()
-	// if err != nil {
-	// 	return "", err
-	// }
-
+func Generate(clientID string) (string, int64, error) {
+	expTime := time.Now().Add(time.Hour * 1).Unix()
 	claims := jwt.MapClaims{
-		"sub":        "todo",
+		"sub":        clientID,
 		"iat":        time.Now().Unix(),
-		"exp":        time.Now().Add(time.Hour * 1).Unix(),
+		"exp":        expTime,
 		"scope":      "todo",
 		"token_type": "Bearer",
 	}
 
-	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	secretByte := []byte(secret)
 	tokenString, err := tok.SignedString(secretByte)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return tokenString, nil
+	return tokenString, expTime, nil
 }
 
-func ParseJWT(tokenString string, secret []byte) {
+func ParseJWT(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		// Validate the algorithm
-		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
+		// Validate the algorithm might be able to use WithValid opt
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return secret, nil
+
+		secretByte := []byte(secret)
+		return secretByte, nil
 	})
 	if err != nil {
 		fmt.Println("Error parsing token:", err)
-		return
+		return nil, err
 	}
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		fmt.Println("Claims:", claims)
-	} else {
-		fmt.Println("Invalid JWT")
-	}
+	return token, nil
 }
