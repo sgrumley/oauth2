@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/sgrumley/oauth/pkg/logger"
 )
 
 type Data struct {
@@ -65,9 +67,10 @@ func (s *Sync) Push(id string, data Data) error {
 	return nil
 }
 
-func Callback(syncer *Sync) http.HandlerFunc {
+func Callback(logger *logger.Logger, syncer *Sync) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("[Client] Callback Received: " + r.RequestURI)
+		logger.Info("[Callback] Received from: " + r.RequestURI)
+
 		clientID := r.URL.Query().Get("client_id")
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
@@ -85,11 +88,11 @@ func Callback(syncer *Sync) http.HandlerFunc {
 			AuthCode: code,
 			Service:  "server",
 		}); err != nil {
-			fmt.Println("[Client] Callback - channel send failed: ", err)
+			logger.Error("[Callback] channel send failed", err)
 			http.Error(w, "callback push failed", http.StatusInternalServerError)
 		}
 
-		fmt.Println("[Client] Callback - channel sent")
+		logger.Info("[Callback]  channel sent")
 		w.WriteHeader(http.StatusOK)
 	}
 }

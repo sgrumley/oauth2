@@ -28,6 +28,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	log := logger.NewLogger()
+	log.Logger = log.With(slog.String("service", "[CLIENT PKCE]"))
 	ctx = logger.AddLoggerContext(ctx, log.Logger)
 
 	env, err := config.LoadEnvVarFile()
@@ -43,8 +44,8 @@ func main() {
 	mux := http.NewServeMux()
 	s := sync.New()
 	// Routes
-	mux.HandleFunc("GET /callback", sync.Callback(s))
-	mux.HandleFunc("POST /callback", sync.Callback(s))
+	mux.HandleFunc("GET /callback", sync.Callback(log, s))
+	mux.HandleFunc("POST /callback", sync.Callback(log, s))
 
 	server := &http.Server{
 		Addr:    env.AuthCodeHost + env.AuthCodePort,
@@ -65,7 +66,7 @@ func main() {
 }
 
 func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
-	logger.Info(ctx, "[Client] Started auth flow")
+	logger.Info(ctx, "started auth flow")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -101,22 +102,22 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 		return
 	}
 
-	logger.Info(ctx, "[Client] Waiting for authorization code")
+	logger.Info(ctx, "waiting for authorization code")
 	callbackHandler := <-ch
-	logger.Info(ctx, "[Client] Auth Code Response", slog.String("code", callbackHandler.AuthCode))
+	logger.Info(ctx, "auth Code Response", slog.String("code", callbackHandler.AuthCode))
 
 	if state != callbackHandler.State {
 		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, callbackHandler.State))
 	}
 
 	// Step 4: Exchange the auth code and code verifier for an access token
-	logger.Info(ctx, "[Client] Calling /token")
+	logger.Info(ctx, "calling /token")
 	token, err := conf.Exchange(ctx, callbackHandler.AuthCode, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	if err != nil {
 		logger.Fatal(ctx, "server error", err)
 	}
 
-	logger.Info(ctx, "[Client] flow completed with Token",
+	logger.Info(ctx, "flow completed with Token",
 		slog.String("access_token", token.AccessToken),
 		slog.String("refresh_token", token.RefreshToken), // this will come in a later commit
 		slog.Int64("expire_time", token.ExpiresIn),
