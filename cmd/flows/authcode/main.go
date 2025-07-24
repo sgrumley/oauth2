@@ -73,7 +73,7 @@ func main() {
 	}
 }
 
-/* example
+/* RFC 6749 Section 4.1.1: Authorization Request example
  https://authorization-server.com/authorize?
 	response_type=code
 	&client_id=oEGPvWefgcAyteDkBT4b2QSN
@@ -82,15 +82,14 @@ func main() {
 	&state=OqEo1LX_r-atq7-L
 */
 
+// AuthorizationCodeFlow demonstrates the standard OAuth2 Authorization Code flow
+// RFC 6749 Section 4.1: Authorization Code Grant
 func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig, s *sync.Sync) {
 	logger.Info(ctx, "Started auth flow")
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// tls, err := NewSSLClient("server.crt")
-	// if err != nil {
-	// 	panic(err)
-	// }
+	// RFC 6749 Section 4.1: Authorization Code Grant flow
 
 	conf := &oauth2.Config{
 		ClientID:     cfg.ClientID,
@@ -104,6 +103,7 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig, s *sync.Syn
 		Scopes:      []string{"read post"},
 	}
 
+	// RFC 6749 Section 10.12: CSRF protection using state parameter
 	state, err := auth.GenerateState()
 	if err != nil {
 		logger.Fatal(ctx, "failed to generate state", err)
@@ -111,6 +111,7 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig, s *sync.Syn
 
 	ch := s.Register(state)
 
+	// RFC 6749 Section 4.1.1: Authorization Request
 	codeURL := conf.AuthCodeURL(state)
 	if err := authcode.GetAuthorizationCode(ctx, codeURL); err != nil {
 		logger.Error(ctx, "get auth code request failed", err)
@@ -126,6 +127,7 @@ func AuthorizationCodeFlow(ctx context.Context, cfg *AuthCodeConfig, s *sync.Syn
 		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, callbackHandler.State))
 	}
 
+	// RFC 6749 Section 4.1.3: Exchange authorization code for access token
 	logger.Info(ctx, "calling /token")
 	token, err := conf.Exchange(ctx, callbackHandler.AuthCode)
 	if err != nil {

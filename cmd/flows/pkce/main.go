@@ -65,6 +65,8 @@ func main() {
 	}
 }
 
+// PKCEFlow demonstrates the OAuth2 Authorization Code flow with PKCE extension
+// RFC 7636: Proof Key for Code Exchange by OAuth Public Clients
 func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 	logger.Info(ctx, "started auth flow")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -87,14 +89,14 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 		Scopes:      []string{"read post"},
 	}
 
-	// Step 1: Create a secret code verifier and code challenge
+	// RFC 7636 Section 4.1: PKCE flow - Create code verifier and challenge
 	codeVerifier := auth.GenerateCodeVerifier()
 	codeChallenge := auth.GenerateCodeChallenge(codeVerifier)
 
-	// Step 2: Build the authorization URL and redirect the user to the auth server
+	// RFC 7636 Section 4.3: Build authorization URL with PKCE parameters
 	codeURL := conf.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
-		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"), // RFC 7636 Section 4.2: S256 method recommended
 	)
 
 	if err := authcode.GetAuthorizationCode(ctx, codeURL); err != nil {
@@ -110,7 +112,7 @@ func PKCEFlow(ctx context.Context, cfg *PKCEConfig, s *sync.Sync) {
 		logger.Fatal(ctx, "server error", fmt.Errorf("state mismatch: expected %s, got %s", state, callbackHandler.State))
 	}
 
-	// Step 4: Exchange the auth code and code verifier for an access token
+	// RFC 7636 Section 4.5: Exchange auth code with code_verifier for access token
 	logger.Info(ctx, "calling /token")
 	token, err := conf.Exchange(ctx, callbackHandler.AuthCode, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	if err != nil {

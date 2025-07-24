@@ -39,9 +39,11 @@ func main() {
 	s := sync.New()
 	authHandler := authcode.NewHandler(store, cfg.LoginURL, s)
 
-	// Routes
+	// OAuth2 endpoints - RFC 6749
 	mux := http.NewServeMux()
+	// RFC 6749 Section 3.1: Authorization Endpoint
 	mux.HandleFunc("GET /authorize", authHandler.Authorization)
+	// RFC 6749 Section 3.2: Token Endpoint
 	mux.HandleFunc("POST /oauth/token", authHandler.Token)
 
 	mux.HandleFunc("GET /callback", sync.Callback(log, s))

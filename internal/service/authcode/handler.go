@@ -69,7 +69,7 @@ type AuthResponse struct {
 }
 
 /*
-errors:
+RFC 6749 Section 4.1.2.1: Authorization Error Response - possible error codes:
          invalid_request
                The request is missing a required parameter, includes an
                invalid parameter value, includes a parameter more than
