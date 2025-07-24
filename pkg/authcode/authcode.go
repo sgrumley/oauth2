@@ -176,7 +176,7 @@ func (c *Client) ExchangeCodeForToken(ctx context.Context, code, state, expected
 }
 
 func GetAuthorizationCode(ctx context.Context, url string) error {
-	logger.Info(ctx, "[Client] Calling "+url)
+	logger.Info(ctx, "Calling "+url)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create auth code request: %w", err)
@@ -203,7 +203,7 @@ func GetAuthorizationCode(ctx context.Context, url string) error {
 		return fmt.Errorf("auth code request failed: %v", string(body))
 	}
 
-	logger.Info(ctx, "[Client] auth code response",
+	logger.Info(ctx, "auth code response",
 		slog.Int("status code", resp.StatusCode),
 		slog.String("body", string(body)),
 	)

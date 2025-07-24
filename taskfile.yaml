@@ -21,11 +21,16 @@ tasks:
     desc: Start the client
     cmds:
       - go run ./cmd/flows/authcode/...
-
+  
   pkce-client-start:
     desc: Start the client
     cmds:
       - go run ./cmd/flows/pkce/...
+
+  trace:
+    desc: After running a service a trace file will be output in the root level. This will read the file
+    cmds:
+      - go tool trace trace.out 
 
   clean:
     desc: Clean up running processes

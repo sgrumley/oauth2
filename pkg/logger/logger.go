@@ -3,6 +3,9 @@ package logger
 import (
 	"log/slog"
 	"os"
+	"time"
+
+	"github.com/lmittmann/tint"
 )
 
 type Logger struct {
@@ -23,6 +26,7 @@ type Handler string
 const (
 	HandlerJSON Handler = "json"
 	HandlerText Handler = "text"
+	HandlerTint Handler = "tint"
 )
 
 type (
@@ -62,7 +66,7 @@ func WithOutput(out *os.File) Option {
 func NewLogger(options ...Option) *Logger {
 	opts := LoggerOptions{
 		level:  LevelInfo,
-		format: HandlerText,
+		format: HandlerTint,
 		output: os.Stdout,
 		source: false,
 	}
@@ -94,6 +98,14 @@ func getHandler(opts LoggerOptions) slog.Handler {
 	case HandlerText:
 		return slog.NewTextHandler(opts.output, baseOpts)
 
+	case HandlerTint:
+		w := os.Stderr
+		return tint.NewHandler(w, &tint.Options{
+			AddSource:  false,
+			Level:      slog.LevelDebug,
+			TimeFormat: time.Kitchen,
+			NoColor:    false,
+		})
 	}
 
 	return slog.NewTextHandler(opts.output, baseOpts)

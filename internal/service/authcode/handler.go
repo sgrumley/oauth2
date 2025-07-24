@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/sgrumley/oauth/internal/models"
 	"github.com/sgrumley/oauth/internal/token"
 	"github.com/sgrumley/oauth/pkg/browser"
+	"github.com/sgrumley/oauth/pkg/logger"
 	"github.com/sgrumley/oauth/pkg/sync"
 	"github.com/sgrumley/oauth/pkg/web"
 )
@@ -108,7 +110,9 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	fmt.Println("[Server] Authorization request received")
+	l := logger.FromContext(ctx)
+	l = l.With(slog.String("endpoint", "/auth"))
+	logger.Info(ctx, "Authorization request received")
 	// if r.TLS != nil {
 	// 	log.Printf("TLS Version: %x, Cipher Suite: %s",
 	// 		r.TLS.Version,
@@ -133,39 +137,45 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
 	queryParams := r.URL.Query()
-	fmt.Println("All query parameters:", queryParams)
-	fmt.Printf("[Server] Authorization request: \n\tresponse_type: %s\n\tclientID: %s\n\tredirect_uri: %s\n", responseType, clientID, redirectURI)
+	logger.Info(ctx, "Authorization Request",
+		slog.String("response_type", responseType),
+		slog.String("client_id", clientID),
+		slog.String("redirect_uri", redirectURI),
+		slog.Any("all query params", queryParams),
+	)
 
 	// NOTE: only supporting code for now
 	if responseType != "code" {
-		fmt.Println("[Server] Authorization response type: " + responseType)
+		logger.Error(ctx, "error", fmt.Errorf("invalid response type: "+responseType))
 		web.Respond(w, http.StatusBadRequest, "unsupported_response_type")
 		return
 	}
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
-		fmt.Println("[Server] Authorization client: " + client.ID)
+		logger.Error(ctx, "error", fmt.Errorf("invalid clientID: "+clientID))
 		web.Respond(w, http.StatusBadRequest, "unauthorized_client")
 		return
 	}
 
 	if client.RedirectURI != redirectURI {
-		fmt.Println("[Server] Authorization redirect: " + client.RedirectURI + " vs actual: " + redirectURI)
+		logger.Error(ctx, "error", fmt.Errorf("invalid redirect_uri: "+client.RedirectURI+" vs actual: "+redirectURI))
 		web.Respond(w, http.StatusBadRequest, "invalid_redirect_uri")
 		return
 	}
 
 	loginStateURL := h.loginURL + "?state=" + state
-	fmt.Println("[Server] Authorization redirected to " + loginStateURL)
+	logger.Info(ctx, "redirected to login page "+loginStateURL)
 	// NOTE: terminal based flow cannot redirect
 	if err := browser.OpenBrowser(loginStateURL); err != nil {
-		fmt.Println("failed to open browser")
+		logger.Error(ctx, "error", fmt.Errorf("failed to open browser to login page: "+loginStateURL))
+		return
 	}
 
 	// wait for the login page to return true
 	select {
 	case <-ctx.Done():
+		logger.Error(ctx, "error", fmt.Errorf("server timed out waiting for login response"))
 		web.Respond(w, http.StatusInternalServerError, "server timeout")
 		return
 	case <-ch:
@@ -179,12 +189,12 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	h.store.SetAuthCode(clientID, code)
 
 	completeRedirectURI := redirectURI + "?code=" + code.Code + "&redirect_uri=" + redirectURI + "&state=" + state
-	fmt.Println("[Server] Authorization redirected to " + completeRedirectURI)
+	logger.Info(ctx, "redirected to user provided url "+completeRedirectURI)
 
 	// NOTE: terminal based flow cannot redirect. Using a GET request allows the callback endpoint to be triggered by a redirect
 	// this is why the second web page opens. This should be a request for terminal flow
 	if err := browser.OpenBrowser(completeRedirectURI); err != nil {
-		fmt.Println("failed to open browser")
+		logger.Error(ctx, "error", fmt.Errorf("failed to open browser to redirect_uri: "+completeRedirectURI))
 	}
 }
 
@@ -209,24 +219,28 @@ type TokenResponse struct {
 
 // https://www.rfc-editor.org/rfc/rfc6749#section-3.2
 func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("[Server] Token request received")
+	ctx := r.Context()
+	l := logger.FromContext(ctx)
+	l = l.With(slog.String("endpoint", "/token"))
+	logger.Info(ctx, "Token request received")
 
 	err := r.ParseForm()
 	if err != nil {
+		logger.Error(ctx, "error", fmt.Errorf("failed parsing form"))
 		web.Respond(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 
 	grantType := r.PostForm.Get("grant_type")
 	if grantType != "authorization_code" {
-		fmt.Println("[Server] Authorization grant_type: authorization_code" + " vs actual: " + grantType)
+		logger.Error(ctx, "error", fmt.Errorf("grant_type: authorization_code vs actual: "+grantType))
 		web.Respond(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
 
 	clientID, clientSecret, err := getClientID(r)
 	if err != nil {
-		fmt.Println("[Server] Token: clientID missing from request")
+		logger.Error(ctx, "error", fmt.Errorf("missing client_id: %w", err))
 		web.Respond(w, http.StatusBadRequest, "invalid_client")
 		return
 	}
@@ -234,25 +248,29 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	code := r.PostForm.Get("code")
 	codeVerifier := r.PostForm.Get("code_verifier")
 	redirectURI := r.PostForm.Get("redirect_uri")
-	fmt.Printf("[Server] Token request: \n\tcode: %s\n\tclientID: %s\n\tredirect_uri: %s\n", code, clientID, redirectURI)
+	logger.Info(ctx, "Token Request",
+		slog.String("code", code),
+		slog.String("clientID", clientID),
+		slog.String("redirectURI", redirectURI),
+	)
 
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
-		fmt.Println("[Server] Token: clientID: " + client.ID + " not found")
+		logger.Error(ctx, "error", fmt.Errorf("clientID not found ", clientID))
 		web.Respond(w, http.StatusBadRequest, "invalid_client")
 		return
 	}
 
 	authCode, err := h.store.GetAuthCode(clientID)
 	if err != nil {
-		fmt.Println("[Server] Token: not found for client: " + clientID + " err: " + err.Error())
+		logger.Error(ctx, "error", fmt.Errorf("auth code not found ", code))
 		web.Respond(w, http.StatusBadRequest, "invalid_client_id")
 		return
 	}
 
 	if clientSecret != "" {
 		if client.Secret != clientSecret {
-			fmt.Println("[Server] Token: invalid client secret: " + client.ID + " vs actual: " + clientID)
+			logger.Error(ctx, "error", fmt.Errorf("invalid client secret: "+client.ID+" vs actual: "+clientID))
 			web.Respond(w, http.StatusBadRequest, "invalid_client")
 			return
 		}
@@ -266,8 +284,8 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		case "plain":
 			challenge = codeVerifier
 		default:
-			// NOTE: RFC mentions that a blank method will default to plain. Choosing to error if not intentional
-			fmt.Println("[Server] Token: invalid code_challenge_method" + authCode.CodeChallengeMethod)
+			// NOTE: RFC mentions that a blank method will default to plain. Choosing to error is intentional
+			logger.Error(ctx, "error", fmt.Errorf("invalid code_challenge_method"+authCode.CodeChallengeMethod))
 			http.Error(w, "invalid_code_challenge_method", http.StatusBadRequest)
 			return
 		}
@@ -277,24 +295,24 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		fmt.Println("[Server] Token: flow not supported")
+		logger.Error(ctx, "error", fmt.Errorf("flow not supported"))
 		web.Respond(w, http.StatusBadRequest, "unauthorized_client")
 		return
 	}
 
 	if authCode.Code != code {
-		fmt.Println("[Server] Token: code: " + code + " vs actual: " + authCode.Code)
+		logger.Error(ctx, "error", fmt.Errorf("invalid code: "+code+" vs actual: "+authCode.Code))
 		web.Respond(w, http.StatusBadRequest, "invalid_code")
 		return
 	}
 
 	if authCode.ExpiresAt.Before(time.Now()) {
-		fmt.Println("[Server] Token: code expired: ", authCode.ExpiresAt)
+		logger.Error(ctx, "error", fmt.Errorf("code expired: ", authCode.ExpiresAt))
 		web.Respond(w, http.StatusBadRequest, fmt.Sprintf("invalid_client_id expired: expired at %v, current time %v", authCode.ExpiresAt, time.Now()))
 		return
 	}
 	if authCode.RedirectURI != redirectURI {
-		fmt.Println("[Server] Token: redirect: " + client.RedirectURI + " vs actual: " + redirectURI)
+		logger.Error(ctx, "error", fmt.Errorf("invalid redirect: "+client.RedirectURI+" vs actual: "+redirectURI))
 		web.Respond(w, http.StatusBadRequest, fmt.Sprintf("invalid_client_id redirect_uri didn't match: expected %q, got %q", authCode.RedirectURI, redirectURI))
 		return
 	}
@@ -320,7 +338,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		TokenType:   "Bearer",
 	}
 
-	fmt.Printf("[Server] Token returned: %v\n", token)
+	logger.Info(ctx, "Token Response", slog.Any("token", res))
 	web.RespondContent(w, http.StatusOK, res)
 }
 
