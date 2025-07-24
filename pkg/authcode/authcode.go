@@ -58,20 +58,23 @@ func (c *Client) SetPKCE(codeVerifier, codeChallenge, codeChallengeMethod string
 	c.CodeChallengeMethod = codeChallengeMethod
 }
 
+// buildAuthorizationURL constructs the authorization endpoint URL with required parameters
+// RFC 6749 Section 4.1.1: Authorization Request
 func (c *Client) buildAuthorizationURL(scope string, state string) (string, error) {
 	baseURL, err := url.Parse(c.AuthURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid AuthURL: %w", err)
 	}
 
-	// TODO: use url.Values instead
+	// RFC 6749 Section 4.1.1: Authorization request parameters
 	query := baseURL.Query()
-	query.Set("response_type", "code")
-	query.Set("redirect_uri", c.RedirectURI)
-	query.Set("client_id", c.ClientID)
-	query.Set("scope", scope)
-	query.Set("state", state)
+	query.Set("response_type", "code")      // RFC 6749 Section 4.1.1: REQUIRED
+	query.Set("redirect_uri", c.RedirectURI) // RFC 6749 Section 4.1.1: OPTIONAL but RECOMMENDED
+	query.Set("client_id", c.ClientID)       // RFC 6749 Section 4.1.1: REQUIRED
+	query.Set("scope", scope)                // RFC 6749 Section 4.1.1: OPTIONAL
+	query.Set("state", state)                // RFC 6749 Section 4.1.1: RECOMMENDED for CSRF protection
 
+	// RFC 7636 Section 4.3: PKCE parameters
 	if c.CodeChallenge != "" {
 		query.Set("code_challenge", c.CodeChallenge)
 		query.Set("code_challenge_method", c.CodeChallengeMethod)
@@ -122,23 +125,27 @@ func (c *Client) GetAuthorizationCode(ctx context.Context, scope string, state s
 }
 
 // ExchangeCodeForToken exchanges the authorization code for an access token
+// RFC 6749 Section 4.1.3: Access Token Request
 func (c *Client) ExchangeCodeForToken(ctx context.Context, code, state, expectedState string) (*TokenResponse, error) {
-	// Verify state parameter to prevent CSRF
+	// RFC 6749 Section 10.12: Verify state parameter to prevent CSRF
 	if state != expectedState {
 		return nil, fmt.Errorf("state mismatch: expected %s, got %s", expectedState, state)
 	}
 
+	// RFC 6749 Section 4.1.3: Token request parameters
 	data := url.Values{
-		"grant_type":   {"authorization_code"},
-		"code":         {code},
-		"redirect_uri": {c.RedirectURI},
-		"client_id":    {c.ClientID},
+		"grant_type":   {"authorization_code"}, // RFC 6749 Section 4.1.3: REQUIRED
+		"code":         {code},                  // RFC 6749 Section 4.1.3: REQUIRED
+		"redirect_uri": {c.RedirectURI},         // RFC 6749 Section 4.1.3: REQUIRED if included in authorization request
+		"client_id":    {c.ClientID},            // RFC 6749 Section 4.1.3: REQUIRED if not using HTTP Basic auth
 	}
 
+	// RFC 6749 Section 2.3.1: Client authentication using client_secret
 	if c.ClientSecret != "" {
 		data.Set("client_secret", c.ClientSecret)
 	}
 
+	// RFC 7636 Section 4.5: PKCE code_verifier parameter
 	if c.CodeVerifier != "" {
 		data.Set("code_verifier", c.CodeVerifier)
 	}

@@ -2,27 +2,33 @@ package models
 
 import "time"
 
+// Client represents an OAuth2 client
+// RFC 6749 Section 2: Client Registration
 type Client struct {
-	ID          string
-	Secret      string
-	RedirectURI string
+	ID          string // RFC 6749 Section 2.2: client identifier
+	Secret      string // RFC 6749 Section 2.3.1: client secret for authentication
+	RedirectURI string // RFC 6749 Section 3.1.2: pre-registered redirection endpoint
 }
 
+// Token represents an OAuth2 access token response
+// RFC 6749 Section 4.1.4: Access Token Response
 type Token struct {
-	AccessToken  string
-	TokenType    string
-	ExpiresIn    int
-	RefreshToken string
-	Scope        string
+	AccessToken  string // RFC 6749 Section 4.1.4: REQUIRED
+	TokenType    string // RFC 6749 Section 4.1.4: REQUIRED, typically "Bearer" per RFC 6750
+	ExpiresIn    int    // RFC 6749 Section 4.1.4: RECOMMENDED, lifetime in seconds
+	RefreshToken string // RFC 6749 Section 4.1.4: OPTIONAL
+	Scope        string // RFC 6749 Section 4.1.4: OPTIONAL if identical to requested
 }
 
+// AuthCode represents an authorization code with PKCE support
+// RFC 6749 Section 4.1.2: Authorization codes are short-lived tokens
 type AuthCode struct {
-	Code                string
-	ClientID            string
-	CodeChallenge       string
-	CodeChallengeMethod string
-	ExpiresAt           time.Time
-	RedirectURI         string
+	Code                string    // RFC 6749 Section 4.1.2: authorization code value
+	ClientID            string    // RFC 6749 Section 4.1.2: client identifier
+	CodeChallenge       string    // RFC 7636 Section 4.3: PKCE code challenge
+	CodeChallengeMethod string    // RFC 7636 Section 4.3: transformation method (S256 or plain)
+	ExpiresAt           time.Time // RFC 6749 Section 4.1.2: codes MUST expire (10 minutes max recommended)
+	RedirectURI         string    // RFC 6749 Section 4.1.2: redirection endpoint
 }
 
 // Types based on go/x/oauth2

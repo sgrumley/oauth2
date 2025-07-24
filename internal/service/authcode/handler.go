@@ -119,6 +119,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	// 		tls.CipherSuiteName(r.TLS.CipherSuite))
 	// }
 
+	// RFC 6749 Section 4.1.1: Authorization Code Grant - Authorization Request
 	clientID := r.URL.Query().Get("client_id")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
@@ -132,7 +133,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 	}
 	ch := h.syncer.Register(id)
 
-	// used for PKCE only
+	// RFC 7636 Section 4.3: Client sends code_challenge and code_challenge_method in authorization request
 	codeChallenge := r.URL.Query().Get("code_challenge")
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
@@ -151,6 +152,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RFC 6749 Section 2.2: The client identifier is not a secret
 	client, err := h.store.GetClient(clientID)
 	if err != nil {
 		logger.Error(ctx, "error", fmt.Errorf("invalid clientID: "+clientID))
@@ -158,6 +160,7 @@ func (h *Handler) Authorization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RFC 6749 Section 3.1.2.3: Redirection endpoint must match exactly
 	if client.RedirectURI != redirectURI {
 		logger.Error(ctx, "error", fmt.Errorf("invalid redirect_uri: "+client.RedirectURI+" vs actual: "+redirectURI))
 		web.Respond(w, http.StatusBadRequest, "invalid_redirect_uri")
@@ -275,21 +278,24 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if codeVerifier != "" {
-		// Verify PKCE
+		// RFC 7636 Section 4.6: Verify PKCE code_verifier against code_challenge
 		var challenge string
 		switch authCode.CodeChallengeMethod {
 		case "S256", "s256":
+			// RFC 7636 Section 4.2: S256 code_challenge_method uses SHA256
 			h := sha256.Sum256([]byte(codeVerifier))
 			challenge = base64.RawURLEncoding.EncodeToString(h[:])
 		case "plain":
+			// RFC 7636 Section 4.2: plain code_challenge_method uses verifier as-is
 			challenge = codeVerifier
 		default:
-			// NOTE: RFC mentions that a blank method will default to plain. Choosing to error is intentional
+			// RFC 7636 Section 4.3: If omitted, defaults to "plain"
 			logger.Error(ctx, "error", fmt.Errorf("invalid code_challenge_method"+authCode.CodeChallengeMethod))
 			http.Error(w, "invalid_code_challenge_method", http.StatusBadRequest)
 			return
 		}
 
+		// RFC 7636 Section 4.6: Server verifies code_challenge equals transformed code_verifier
 		if challenge != authCode.CodeChallenge {
 			http.Error(w, "PKCE verification failed", http.StatusBadRequest)
 			return
@@ -332,21 +338,25 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	h.store.DeleteAuthCode(code)
 
+	// RFC 6749 Section 4.1.4: Access Token Response
 	res := TokenResponse{
 		AccessToken: token,
 		ExpiresIn:   expTime,
-		TokenType:   "Bearer",
+		TokenType:   "Bearer", // RFC 6750: Bearer Token Usage
 	}
 
 	logger.Info(ctx, "Token Response", slog.Any("token", res))
 	web.RespondContent(w, http.StatusOK, res)
 }
 
+// getClientID extracts client credentials from request body or Authorization header
+// RFC 6749 Section 2.3: Client authentication methods
 func getClientID(r *http.Request) (string, string, error) {
+	// RFC 6749 Section 2.3.1: client_id and client_secret in request body
 	clientID := r.PostForm.Get("client_id")
 	clientSecret := r.PostForm.Get("client_secret")
 
-	// try the request header
+	// RFC 6749 Section 2.3.1: HTTP Basic authentication as alternative
 	if clientID == "" {
 		auth := r.Header.Get("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Basic ") {

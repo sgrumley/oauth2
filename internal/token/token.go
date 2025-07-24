@@ -20,6 +20,8 @@ func GenerateRandomString() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
+// GenerateAuthCode creates an authorization code with expiration
+// RFC 6749 Section 4.1.2: Authorization codes MUST expire shortly after issuance (maximum 10 minutes recommended)
 func GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod string) (models.AuthCode, error) {
 	code, err := GenerateRandomString()
 	if err != nil {
@@ -30,13 +32,15 @@ func GenerateAuthCode(clientID, redirectURI, codeChallenge, codeChallengeMethod 
 		ClientID:            clientID,
 		CodeChallenge:       codeChallenge,
 		CodeChallengeMethod: codeChallengeMethod,
-		ExpiresAt:           time.Now().Add(10 * time.Minute),
+		ExpiresAt:           time.Now().Add(10 * time.Minute), // RFC 6749 Section 4.1.2: 10 minutes maximum lifetime
 		RedirectURI:         redirectURI,
 	}
 
 	return ac, nil
 }
 
+// Generate creates an access token and refresh token pair
+// RFC 6749 Section 1.4: Access tokens are credentials used to access protected resources
 func Generate() (models.Token, error) {
 	accessToken, err := GenerateRandomString()
 	if err != nil {
@@ -48,10 +52,10 @@ func Generate() (models.Token, error) {
 	}
 	tok := models.Token{
 		AccessToken:  accessToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    3600,
-		RefreshToken: refreshToken,
-		Scope:        "read write",
+		TokenType:    "Bearer",    // RFC 6750: Bearer Token Usage
+		ExpiresIn:    3600,        // RFC 6749 Section 4.1.4: expires_in is RECOMMENDED
+		RefreshToken: refreshToken, // RFC 6749 Section 1.5: Refresh tokens are credentials used to obtain access tokens
+		Scope:        "read write", // RFC 6749 Section 3.3: Access token scope
 	}
 
 	return tok, nil
